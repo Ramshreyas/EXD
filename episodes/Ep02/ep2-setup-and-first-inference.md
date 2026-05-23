@@ -196,14 +196,14 @@ cd ~/EXD
 tree
 ```
 
+Each `.env` file is a model recipe. Here's the 7B config:
+
 ```bash
 # atom
-cd projects/serve
-ls configs/
+cat projects/serve/configs/qwen2.5-7b.env
 ```
 
-Each `.env` file is a model recipe: image, model ID, GPU budget, extra flags.
-Same thing as above, but now just:
+Same thing as the raw Docker command, but now just:
 
 ```bash
 # atom
@@ -216,6 +216,15 @@ What happens:
 - Mounts `~/cache/hf` and `~/models` so the model is visible inside the container
 - Model loads into GPU memory (unified, so it "just fits")
 - GPU memory utilization is capped at `0.85` by default
+
+Wait for it to come up:
+
+```bash
+# atom
+docker logs -f vllm
+# look for: "Uvicorn running on http://0.0.0.0:8000"
+# Ctrl+C once you see it
+```
 
 Same smoke test, same endpoint:
 
@@ -237,27 +246,28 @@ For the video, keep it running — we'll hit it from Yoneda next.
 
 ## 6. Inference from Yoneda
 
-atom exposes vLLM on port 8000. The container binds to `0.0.0.0:8000`, but
-we don't expose it to the wider network — we tunnel.
+atom exposes vLLM on port 8000. Since the container binds `0.0.0.0` and
+atom is on the local network, we can hit it directly via mDNS.
 
-### Option A: SSH tunnel (manual, works everywhere)
+### Option A: Direct via mDNS
 
-```bash
-# yoneda (separate terminal, keep it open)
-ssh -L 8000:localhost:8000 atom
-```
-
-Now `localhost:8000` on Yoneda forwards to atom's port 8000. In another
-Yoneda terminal:
+Find your GPU machine's mDNS hostname:
 
 ```bash
 # yoneda
-curl -s http://localhost:8000/v1/models | python3 -m json.tool
+ssh -G atom | grep hostname
+```
+
+Hit it:
+
+```bash
+# yoneda
+curl -s http://aitopatom-0a62.local:8000/v1/models | python3 -m json.tool
 ```
 
 ```bash
 # yoneda
-curl -s http://localhost:8000/v1/chat/completions \
+curl -s http://aitopatom-0a62.local:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "Qwen/Qwen2.5-7B-Instruct",
@@ -267,127 +277,26 @@ curl -s http://localhost:8000/v1/chat/completions \
   }' | python3 -m json.tool
 ```
 
-### Option B: VS Code Remote-SSH (auto-forwards)
+### Option B: SSH tunnel
+
+If you prefer to keep everything on `localhost`:
+
+```bash
+# yoneda (separate terminal, keep it open)
+ssh -N -L 8000:localhost:8000 atom
+# -N: tunnel only, no remote shell. It'll just sit there — that's correct.
+```
+
+Then use `localhost:8000` in the same curl commands above.
+
+### Option C: VS Code Remote-SSH (auto-forwards)
 
 If you use VS Code's Remote-SSH to work on atom, port 8000 is forwarded
-automatically. Just hit `localhost:8000` from Yoneda — no manual tunnel.
-
-### Option C: Direct (if you trust your LAN)
-
-Since the container binds `0.0.0.0`, you can hit the mDNS hostname directly
-(find yours with `ssh -G atom | grep hostname`):
-
-```bash
-# yoneda
-curl -s http://<mdns-hostname>.local:8000/v1/models | python3 -m json.tool
-```
-
-Pick the one that fits your setup. For the rest of this episode I'll assume
-the SSH tunnel.
+automatically — just hit `localhost:8000`.
 
 ---
 
-## 7. Quick benchmark
-
-A lightweight latency/throughput check using the OpenAI-compatible API.
-Save this as `bench.py` on Yoneda:
-
-```python
-# yoneda: bench.py
-import time, requests
-
-URL = "http://localhost:8000/v1/chat/completions"
-MODEL = "Qwen/Qwen2.5-7B-Instruct"
-
-payload = {
-    "model": MODEL,
-    "messages": [{"role": "user", "content": "Write a 200-word essay about GPUs."}],
-    "max_tokens": 256,
-    "temperature": 0.0,
-}
-
-start = time.monotonic()
-resp = requests.post(URL, json=payload)
-resp.raise_for_status()
-elapsed = time.monotonic() - start
-
-body = resp.json()
-choice = body["choices"][0]
-ttft = None  # time to first token — requires streaming, see below
-completion_tokens = body["usage"]["completion_tokens"]
-total_tokens = body["usage"]["total_tokens"]
-
-print(f"Status:         {resp.status_code}")
-print(f"Time (wall):    {elapsed:.2f} s")
-print(f"Prompt tokens:  {body['usage']['prompt_tokens']}")
-print(f"Completion:     {completion_tokens} tokens")
-print(f"Throughput:     {completion_tokens / elapsed:.1f} tok/s")
-print(f"---")
-print(choice["message"]["content"][:200])
-```
-
-Run it:
-
-```bash
-# yoneda
-python3 bench.py
-```
-
-For proper TTFT (time-to-first-token) and per-token latency, use streaming:
-
-```python
-# yoneda: bench_stream.py
-import time, requests, json
-
-URL = "http://localhost:8000/v1/chat/completions"
-MODEL = "Qwen/Qwen2.5-7B-Instruct"
-
-payload = {
-    "model": MODEL,
-    "messages": [{"role": "user", "content": "Write a 200-word essay about GPUs."}],
-    "max_tokens": 256,
-    "temperature": 0.0,
-    "stream": True,
-}
-
-tokens = []
-ttft = None
-start = time.monotonic()
-
-with requests.post(URL, json=payload, stream=True) as resp:
-    resp.raise_for_status()
-    for line in resp.iter_lines():
-        if not line:
-            continue
-        line = line.decode("utf-8")
-        if line == "data: [DONE]":
-            break
-        if line.startswith("data: "):
-            chunk = json.loads(line[6:])
-            delta = chunk["choices"][0].get("delta", {})
-            content = delta.get("content", "")
-            if content:
-                if ttft is None:
-                    ttft = time.monotonic() - start
-                tokens.append(content)
-
-elapsed = time.monotonic() - start
-
-print(f"TTFT:           {ttft*1000:.0f} ms")
-print(f"Total time:     {elapsed:.2f} s")
-print(f"Tokens:         {len(tokens)}")
-print(f"Throughput:     {len(tokens) / elapsed:.1f} tok/s")
-print(f"Tok/tok (gen):  {(elapsed - ttft) / len(tokens) * 1000:.0f} ms avg")
-```
-
-```bash
-# yoneda
-python3 bench_stream.py
-```
-
----
-
-## 8. What we just did
+## 7. What we just did
 
 ```
 atom:   pulled a model → served it with vLLM on port 8000
