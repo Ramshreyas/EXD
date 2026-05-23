@@ -16,9 +16,10 @@ Repo: `github.com/Ramshreyas/EXD`
 ## Directory Layout
 
 - **`/home/ramshreyas/Documents/Dev/EXD/`** (Yoneda) — Git repo root. All notebooks, code, documentation, experiments.
-- **`EXD/project/`** — Atom-bound code: serve harness, configs, benchmarks. This is what gets synced to atom.
-- **`~/projects/`** (atom) — Git clone of this repo. Keep atom clean — only this clone. Source of truth is Yoneda.
-- **`~/projects/project/serve/`** (atom) — vLLM inference harness. Config-driven: `./scripts/up.sh <config-name>`
+- **`EXD/projects/`** — Atom-bound code: serve harness, configs, benchmarks. This is what gets synced to atom.
+- **`~/EXD/`** (atom) — Git clone of this repo. Keep atom clean — only this clone. Source of truth is Yoneda.
+- **`EXD/episodes/`** — YouTube follow-along materials: code, docs, and other assets for the video series accompanying this project.
+- **`~/EXD/projects/serve/`** (atom) — vLLM inference harness. Config-driven: `./scripts/up.sh <config-name>`
 
 ## Focus Areas
 
@@ -31,6 +32,6 @@ Repo: `github.com/Ramshreyas/EXD`
 
 1. Write code, notebooks, and docs locally on **Yoneda** in VS Code
 2. Commit and push to GitHub: `git push`
-3. Pull on **atom**: `ssh atom 'cd ~/projects && git pull'`
+3. Pull on **atom**: `ssh atom 'cd ~/EXD && git pull'`
 4. Run experiments on atom via the SSH terminal
 5. Results, analysis, and notes come back to EXD on Yoneda
