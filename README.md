@@ -1,4 +1,4 @@
-# EXD — Self-Directed PhD in AI
+# EXD — SELF-DIRECTED P̶h̶D̶ EXD in AI
 
 An open learning log for deep AI engineering mastery. Work backwards from high-level concepts to fundamentals — not bottom-up from theory.
 

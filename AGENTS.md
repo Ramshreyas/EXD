@@ -7,7 +7,7 @@ EXD is an open learning log for deep AI engineering mastery. Work backwards from
 | Name | Role | Access |
 |------|------|--------|
 | **Yoneda** | Desktop (where pi runs, where EXD lives) | — |
-| **atom** | Gigabyte AI TOP (DGX Spark variant) — runs models, training, inference | `ssh ramshreyas@atom` |
+| **atom** | Gigabyte AI TOP (DGX Spark variant) — runs models, training, inference | `ssh atom` |
 
 Work locally on Yoneda in VS Code. Keep a plain SSH terminal open to atom for running commands.
 
@@ -31,6 +31,6 @@ Repo: `github.com/Ramshreyas/EXD`
 
 1. Write code, notebooks, and docs locally on **Yoneda** in VS Code
 2. Commit and push to GitHub: `git push`
-3. Pull on **atom**: `ssh ramshreyas@atom 'cd ~/projects && git pull'`
+3. Pull on **atom**: `ssh atom 'cd ~/projects && git pull'`
 4. Run experiments on atom via the SSH terminal
 5. Results, analysis, and notes come back to EXD on Yoneda
