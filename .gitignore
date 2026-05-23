@@ -1,0 +1,5 @@
+# sync active symlink — runtime-only state, not source
+project/serve/configs/active
+
+# runtime logs
+project/serve/logs/*.log
