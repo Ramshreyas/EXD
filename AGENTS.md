@@ -9,13 +9,16 @@ EXD is an open learning log for deep AI engineering mastery. Work backwards from
 | **Yoneda** | Desktop (where pi runs, where EXD lives) | — |
 | **atom** | Gigabyte AI TOP (DGX Spark variant) — runs models, training, inference | `ssh atom` as `ramshreyas` |
 
-A remote session to atom is typically open in another terminal. When running inside a VS Code terminal, `ssh atom` works directly.
+Work locally on Yoneda in VS Code. Keep a plain SSH terminal open to atom for running commands.
+
+Repo: `github.com/Ramshreyas/EXD`
 
 ## Directory Layout
 
-- **`/home/ramshreyas/Documents/Dev/EXD/`** (Yoneda) — All notebooks, code, documentation, experiments. This is the project root.
-- **`~/project/`** (atom) — Project code that needs to run on atom. Keep atom clean — only files required for execution live here. Source of truth for code lives on Yoneda in EXD.
-- **`~/project/serve/`** (atom) — Minimal harness for running models using config files. Inspect it to understand how models are served.
+- **`/home/ramshreyas/Documents/Dev/EXD/`** (Yoneda) — Git repo root. All notebooks, code, documentation, experiments.
+- **`EXD/project/`** — Atom-bound code: serve harness, configs, benchmarks. This is what gets synced to atom.
+- **`~/projects/`** (atom) — Git clone of this repo. Keep atom clean — only this clone. Source of truth is Yoneda.
+- **`~/projects/project/serve/`** (atom) — vLLM inference harness. Config-driven: `./scripts/up.sh <config-name>`
 
 ## Focus Areas
 
@@ -26,7 +29,8 @@ A remote session to atom is typically open in another terminal. When running ins
 
 ## Workflow
 
-1. Write code, notebooks, and docs on **Yoneda** in the EXD directory
-2. When something needs to run on the GPU, push relevant code to **atom** (`~/project/`)
-3. Run experiments on atom; keep it minimal and clean
-4. Results, analysis, and notes come back to EXD on Yoneda
+1. Write code, notebooks, and docs locally on **Yoneda** in VS Code
+2. Commit and push to GitHub: `git push`
+3. Pull on **atom**: `ssh atom 'cd ~/projects && git pull'`
+4. Run experiments on atom via the SSH terminal
+5. Results, analysis, and notes come back to EXD on Yoneda
