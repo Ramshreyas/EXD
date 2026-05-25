@@ -58,7 +58,7 @@ ssh atom echo ok
 ### Hardware
 
 Gigabyte AI TOP (DGX Spark variant):
-- NVIDIA Grace-Hopper Superchip
+- NVIDIA Grace-Blackwell Superchip
 - **Unified memory**: single 128 GB pool shared between CPU and GPU
   — no PCIe bottleneck, CPU and GPU see the same physical memory
 - This is why we can run large models without worrying about VRAM vs. RAM
@@ -66,7 +66,7 @@ Gigabyte AI TOP (DGX Spark variant):
 
 ### Software stack
 
-- **NVIDIA Linux** (custom kernel with Grace-Hopper drivers)
+- **NVIDIA Linux** (custom kernel with Grace-Blackwell drivers)
 - **Docker** as the runtime for all GPU workloads — clean isolation,
   reproducible environments
 - **vLLM** runs inside Docker with `--gpus all --ipc=host`
@@ -85,7 +85,7 @@ Once on atom, check what's under the hood:
 nvidia-smi
 ```
 
-Note: Memory reads "Not Supported" — that's expected. Grace-Hopper uses
+Note: Memory reads "Not Supported" — that's expected. DGX Sparks use
 **unified memory**, so the GPU doesn't have its own VRAM. The system RAM
 *is* GPU memory:
 
