@@ -28,6 +28,14 @@ Repo: `github.com/Ramshreyas/EXD`
 - Inference optimization (quantization, KV cache, speculative decoding, compilation)
 - Work backwards: start with a working high-level thing, then progressively peel back layers to understand internals
 
+## Episodes
+
+| # | Status | Title | Notes |
+|---|--------|-------|-------|
+| 01 | ✅ Complete | Intro to EXD | Project philosophy, learning approach, what EXD is and isn't |
+| 02 | ✅ Complete | Setup Overview | Machines (Yoneda + atom), directory layout, workflow, tooling |
+| 03 | ⬜ Planned | — | — |
+
 ## Workflow
 
 1. Write code, notebooks, and docs locally on **Yoneda** in VS Code
