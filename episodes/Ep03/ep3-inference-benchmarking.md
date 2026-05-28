@@ -5,36 +5,7 @@
 
 ---
 
-## 1. Quick recap (30 seconds)
-
-From Ep 2 — we have two machines:
-
-```
-Yoneda (desktop)          atom (GPU box, mDNS: aitopatom-0a62.local)
-Ubuntu, VS Code     ←→    NVIDIA Grace-Blackwell, Docker, vLLM
-   client                  server, port 8000
-```
-
-```bash
-# yoneda — still works?
-ssh atom echo ok
-```
-
-atom runs vLLM inside Docker via the config-driven harness at
-`~/EXD/projects/serve/`:
-
-```bash
-# atom
-cd ~/EXD
-ls projects/serve/configs/
-```
-
-We'll pick a config, bring up the server, and throw traffic at it from
-Yoneda. That's the loop.
-
----
-
-## 2. What is inference? — the toy model
+## 1. What is inference? — the toy model
 
 Don't think about attention or transformers yet. Here's the simplest
 possible model of what happens when you send a prompt to an LLM.
@@ -148,7 +119,7 @@ And two latency numbers:
 
 ---
 
-## 3. The model we're benchmarking
+## 2. The model we're benchmarking
 
 Qwen3.6 35B-A3B — a Mixture-of-Experts model:
 - **35B total** parameters, but only **3B active** per token
@@ -165,7 +136,7 @@ hf cache ls 2>/dev/null | grep -i qwen
 
 ---
 
-## 4. Start with vanilla flags
+## 3. Start with vanilla flags
 
 First, let's see what the baseline config looks like — no special tuning:
 
@@ -223,7 +194,7 @@ curl -s http://aitopatom-0a62.local:8000/v1/chat/completions \
 
 ---
 
-## 5. vLLM's built-in benchmark
+## 4. vLLM's built-in benchmark
 
 vLLM ships with `vllm bench serve` — a quick way to measure throughput
 without extra tooling. We'll run it from *inside* the Docker container on
@@ -274,7 +245,7 @@ These numbers are our baseline. Write them down (or screenshot the output).
 
 ---
 
-## 6. llama-benchy — a richer benchmark
+## 5. llama-benchy — a richer benchmark
 
 vLLM's built-in bench is fast to use but limited. llama-benchy gives us:
 - Multiple prompt lengths and output lengths in one run
@@ -351,7 +322,7 @@ Take note of these baseline numbers. We'll compare after the next step.
 
 
 
-## 7. What we just did
+## 6. What we just did
 
 ```
 1. Built a mental model of inference: prefill vs decode, TTFT vs TPOT
