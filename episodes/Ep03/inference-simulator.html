@@ -89,30 +89,24 @@
     gap: 1rem; margin-bottom: 1.5rem;
   }
   .res {
-    border: 1px solid var(--border); border-radius: 8px;
-    padding: 0.6rem; background: var(--bg);
+    border: 2px solid var(--border); border-radius: 8px;
+    padding: 0.6rem 0.4rem; background: var(--bg); text-align: center;
+    transition: all 0.3s ease;
   }
   .res-label {
     font-size: 0.7rem; text-transform: uppercase;
-    letter-spacing: 0.05em; margin-bottom: 0.3rem;
+    letter-spacing: 0.05em; margin-bottom: 0.15rem;
   }
-  .res-bar-bg {
-    height: 8px; background: var(--border); border-radius: 4px;
-    overflow: hidden; margin-bottom: 0.25rem;
-  }
-  .res-bar {
-    height: 100%; border-radius: 4px; width: 0%;
-    transition: width 0.4s ease;
-  }
-  .res-val { font-size: 0.65rem; color: var(--dim); }
+  .res-status { font-size: 0.65rem; color: var(--dim); }
   .res.cpu .res-label { color: var(--cpu); }
-  .res.cpu .res-bar { background: var(--cpu); }
   .res.ram .res-label { color: var(--ram); }
-  .res.ram .res-bar { background: var(--ram); }
   .res.gpu .res-label { color: var(--gpu); }
-  .res.gpu .res-bar { background: var(--gpu); }
   .res.vram .res-label { color: var(--vram); }
-  .res.vram .res-bar { background: var(--vram); }
+  .res.active.cpu { border-color: var(--cpu); box-shadow: 0 0 10px rgba(240,136,62,0.25); }
+  .res.active.ram { border-color: var(--ram); box-shadow: 0 0 10px rgba(63,185,80,0.25); }
+  .res.active.gpu { border-color: var(--gpu); box-shadow: 0 0 10px rgba(188,140,255,0.25); }
+  .res.active.vram { border-color: var(--vram); box-shadow: 0 0 10px rgba(247,120,186,0.25); }
+  .res.active .res-status { color: inherit; }
 
   /* Token display */
   .token-area {
@@ -231,25 +225,21 @@
 
   <!-- Resources -->
   <div class="resources">
-    <div class="res cpu">
+    <div class="res cpu" id="resCpu">
       <div class="res-label">CPU</div>
-      <div class="res-bar-bg"><div class="res-bar" id="barCpu"></div></div>
-      <div class="res-val" id="valCpu">idle</div>
+      <div class="res-status">idle</div>
     </div>
-    <div class="res ram">
+    <div class="res ram" id="resRam">
       <div class="res-label">RAM</div>
-      <div class="res-bar-bg"><div class="res-bar" id="barRam"></div></div>
-      <div class="res-val" id="valRam">idle</div>
+      <div class="res-status">idle</div>
     </div>
-    <div class="res gpu">
+    <div class="res gpu" id="resGpu">
       <div class="res-label">GPU Compute</div>
-      <div class="res-bar-bg"><div class="res-bar" id="barGpu"></div></div>
-      <div class="res-val" id="valGpu">idle</div>
+      <div class="res-status">idle</div>
     </div>
-    <div class="res vram">
+    <div class="res vram" id="resVram">
       <div class="res-label">VRAM / KV Cache</div>
-      <div class="res-bar-bg"><div class="res-bar" id="barVram"></div></div>
-      <div class="res-val" id="valVram">idle</div>
+      <div class="res-status">idle</div>
     </div>
   </div>
 
@@ -305,14 +295,10 @@ const els = {
   s_prefill:  document.getElementById('s_prefill'),
   s_decode:   document.getElementById('s_decode'),
   s_output:   document.getElementById('s_output'),
-  barCpu:  document.getElementById('barCpu'),
-  valCpu:  document.getElementById('valCpu'),
-  barRam:  document.getElementById('barRam'),
-  valRam:  document.getElementById('valRam'),
-  barGpu:  document.getElementById('barGpu'),
-  valGpu:  document.getElementById('valGpu'),
-  barVram: document.getElementById('barVram'),
-  valVram: document.getElementById('valVram'),
+  resCpu:  document.getElementById('resCpu'),
+  resRam:  document.getElementById('resRam'),
+  resGpu:  document.getElementById('resGpu'),
+  resVram: document.getElementById('resVram'),
   tokenRow:  document.getElementById('tokenRow'),
   kvEntries: document.getElementById('kvEntries'),
   status:    document.getElementById('status'),
@@ -329,15 +315,17 @@ function clearActive() {
   });
 }
 
-function setRes(cpu, ram, gpu, vram) {
-  const set = (bar, val, pct, label) => {
-    bar.style.width = pct + '%';
-    val.textContent = label;
-  };
-  set(els.barCpu,  els.valCpu,  cpu,  cpu  === 0 ? 'idle' : cpu + '%');
-  set(els.barRam,  els.valRam,  ram,  ram  === 0 ? 'idle' : ram + '%');
-  set(els.barGpu,  els.valGpu,  gpu,  gpu  === 0 ? 'idle' : gpu + '%');
-  set(els.barVram, els.valVram, vram, vram === 0 ? 'idle' : vram + '%');
+function setActiveResources(names) {
+  const map = { cpu: els.resCpu, ram: els.resRam, gpu: els.resGpu, vram: els.resVram };
+  for (const [key, el] of Object.entries(map)) {
+    if (names.includes(key)) {
+      el.classList.add('active');
+      el.querySelector('.res-status').textContent = 'active';
+    } else {
+      el.classList.remove('active');
+      el.querySelector('.res-status').textContent = 'idle';
+    }
+  }
 }
 
 function setStatus(msg) { els.status.innerHTML = msg; }
@@ -355,7 +343,7 @@ function setDots(n) {
 // --- Step implementations ---
 function doIdle() {
   clearActive();
-  setRes(0,0,0,0);
+  setActiveResources([]);
   setTokens('<span style="color:var(--dim); font-size:0.8rem;">Waiting for input...</span>');
   setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
   setStatus('Click <span class="highlight">Auto</span> to run the full pipeline, or <span class="highlight">Step</span> to walk through one stage at a time.');
@@ -368,7 +356,7 @@ function doIdle() {
 function doInput() {
   clearActive();
   els.s_input.classList.add('active');
-  setRes(5,10,0,0);
+  setActiveResources(['cpu']);
   setTokens('<span style="color:var(--text); font-size:1rem; font-style:italic;">"The cat sat"</span>');
   setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
   setStatus('📥 <span class="highlight">Input</span> — user submits the prompt text.<br><span style="color:var(--dim); font-size:0.75rem;">CPU &amp; RAM hold the raw string. GPU is idle.</span>');
@@ -379,7 +367,7 @@ function doInput() {
 function doTokenize() {
   clearActive();
   els.s_tokenize.classList.add('active');
-  setRes(40,25,0,0);
+  setActiveResources(['cpu', 'ram']);
   let html = '';
   TOKENS.forEach(t => {
     html += `<span class="token" style="border-color:var(--cpu);">${t.id}</span>`;
@@ -394,7 +382,7 @@ function doTokenize() {
 function doPrefill() {
   clearActive();
   els.s_prefill.classList.add('active');
-  setRes(5,15,95,70);
+  setActiveResources(['gpu', 'vram']);
   let html = '';
   TOKENS.forEach(t => {
     html += `<span class="token prefill">${t.id}<br><small>${t.text}</small></span>`;
@@ -420,7 +408,7 @@ function doDecodeStep(idx) {
   els.s_decode.classList.add('active');
 
   // During decode, GPU is busy but more moderate (memory-bound)
-  setRes(3,10,55,40 + idx * 15);
+  setActiveResources(['gpu', 'vram']);
 
   // Show all tokens so far
   let html = '';
@@ -459,7 +447,7 @@ function doDecodeStep(idx) {
 function doDetokenize() {
   clearActive();
   els.s_output.classList.add('active');
-  setRes(30,15,0,20);
+  setActiveResources(['cpu']);
 
   // Show all tokens
   let html = '';
