@@ -294,7 +294,7 @@ const OUTPUT = [
 ];
 
 const TOTAL_STEPS = 7; // 0:idle, 1:input, 2:tokenize, 3:prefill, 4-6:decode steps
-let step = 0;
+let currentStep = 0;
 let autoTimer = null;
 let decodeIdx = 0;
 
@@ -490,19 +490,19 @@ function step() {
   //    idle returned by reset
   const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
 
-  if (step < actions.length - 1) {
-    step++;
-    actions[step]();
+  if (currentStep < actions.length - 1) {
+    currentStep++;
+    actions[currentStep]();
   }
 
-  if (step >= actions.length - 1) {
+  if (currentStep >= actions.length - 1) {
     els.btnStep.disabled = true;
   }
 }
 
 function reset() {
   stopAuto();
-  step = 0;
+  currentStep = 0;
   decodeIdx = 0;
   doIdle();
   els.btnStep.disabled = false;
@@ -523,7 +523,7 @@ function toggleAuto() {
   function tick() {
     if (i >= actions.length) { stopAuto(); return; }
     actions[i]();
-    step = i;
+    currentStep = i;
     i++;
 
     // Adjust timing: longer pauses for prefill/decode to let viewer read
@@ -542,7 +542,7 @@ function stopAuto() {
   autoTimer = null;
   els.btnAuto.textContent = '▶ Auto';
   els.btnAuto.classList.add('primary');
-  if (step < 7) els.btnStep.disabled = false;
+  if (currentStep < 7) els.btnStep.disabled = false;
 }
 
 // --- Init ---
