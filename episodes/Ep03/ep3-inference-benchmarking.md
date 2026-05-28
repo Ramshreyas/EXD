@@ -131,7 +131,7 @@ It's already pulled on atom from Ep 2:
 
 ```bash
 # atom
-hf cache ls 2>/dev/null | grep -i qwen
+hf cache ls
 ```
 
 ---
@@ -178,7 +178,7 @@ Smoke test:
 
 ```bash
 # yoneda
-curl -s http://aitopatom-0a62.local:8000/v1/models | python3 -m json.tool
+curl -s http://aitopatom-0a62.local:8000/v1/models
 ```
 
 ```bash
@@ -188,8 +188,11 @@ curl -s http://aitopatom-0a62.local:8000/v1/chat/completions \
   -d '{
     "model": "Qwen/Qwen3.6-35B-A3B",
     "messages": [{"role": "user", "content": "One sentence: what is prefill in LLM inference?"}],
-    "max_tokens": 50, "temperature": 0
-  }' | python3 -m json.tool
+    "max_tokens": 300, "temperature": 0
+  }'
+# Qwen3.6 is a reasoning model — it thinks internally (the "reasoning" field)
+# before producing content. 50 tokens wasn't enough to finish the thought.
+# 300 gives it room to reason AND respond.
 ```
 
 ---
