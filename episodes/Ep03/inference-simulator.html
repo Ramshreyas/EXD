@@ -266,6 +266,7 @@
   <div class="controls">
     <button class="primary" id="btnAuto" onclick="toggleAuto()">▶ Auto</button>
     <button id="btnStep" onclick="step()">⏭ Step</button>
+    <button id="btnBack" onclick="back()">⏮ Back</button>
     <button id="btnReset" onclick="reset()">↺ Reset</button>
   </div>
 </div>
@@ -306,6 +307,7 @@ const els = {
   loopInfo:  document.getElementById('loopInfo'),
   btnAuto:   document.getElementById('btnAuto'),
   btnStep:   document.getElementById('btnStep'),
+  btnBack:   document.getElementById('btnBack'),
   stepDots:  document.getElementById('stepDots').children,
 };
 
@@ -486,6 +488,20 @@ function step() {
   if (currentStep >= actions.length - 1) {
     els.btnStep.disabled = true;
   }
+  els.btnBack.disabled = (currentStep <= 0);
+}
+
+function back() {
+  if (autoTimer) return;
+  if (currentStep <= 0) return;
+
+  const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
+
+  currentStep--;
+  actions[currentStep]();
+
+  els.btnStep.disabled = false;
+  els.btnBack.disabled = (currentStep <= 0);
 }
 
 function reset() {
@@ -494,6 +510,7 @@ function reset() {
   decodeIdx = 0;
   doIdle();
   els.btnStep.disabled = false;
+  els.btnBack.disabled = true;
 }
 
 // --- Auto play ---
@@ -504,6 +521,7 @@ function toggleAuto() {
   els.btnAuto.textContent = '⏸ Stop';
   els.btnAuto.classList.remove('primary');
   els.btnStep.disabled = true;
+  els.btnBack.disabled = true;
 
   const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
 
@@ -531,6 +549,7 @@ function stopAuto() {
   els.btnAuto.textContent = '▶ Auto';
   els.btnAuto.classList.add('primary');
   if (currentStep < 7) els.btnStep.disabled = false;
+  els.btnBack.disabled = (currentStep <= 0);
 }
 
 // --- Init ---
