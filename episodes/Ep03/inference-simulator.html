@@ -260,13 +260,13 @@
   </div>
 
   <!-- Status -->
-  <div class="status" id="status">Click <span class="highlight">Auto</span> to run the full pipeline, or <span class="highlight">Step</span> to walk through one stage at a time.</div>
+  <div class="status" id="status">Click <span class="highlight">Auto</span> to run the full pipeline, or use <span class="highlight">Forward</span> / <span class="highlight">Back</span> to walk through one stage at a time.</div>
 
   <!-- Controls -->
   <div class="controls">
     <button class="primary" id="btnAuto" onclick="toggleAuto()">▶ Auto</button>
-    <button id="btnStep" onclick="step()">⏭ Step</button>
     <button id="btnBack" onclick="back()">⏮ Back</button>
+    <button id="btnStep" onclick="step()">⏭ Forward</button>
     <button id="btnReset" onclick="reset()">↺ Reset</button>
   </div>
 </div>
@@ -348,7 +348,7 @@ function doIdle() {
   setActiveResources([]);
   setTokens('<span style="color:var(--dim); font-size:0.8rem;">Waiting for input...</span>');
   setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
-  setStatus('Click <span class="highlight">Auto</span> to run the full pipeline, or <span class="highlight">Step</span> to walk through one stage at a time.');
+  setStatus('Click <span class="highlight">Auto</span> to run the full pipeline, or use <span class="highlight">Forward</span> / <span class="highlight">Back</span> to walk through one stage at a time.');
   els.loopInfo.style.opacity = '0.3';
   els.loopCount.textContent = '0 / ' + OUTPUT.length;
   els.loopCount.classList.remove('active');
