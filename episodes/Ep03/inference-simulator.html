@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Inference — Pipeline Simulator</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --dim: #8b949e;
+    --accent: #58a6ff;
+    --cpu: #f0883e;
+    --ram: #3fb950;
+    --gpu: #bc8cff;
+    --vram: #f778ba;
+    --prefill: #da3633;
+    --decode: #d29922;
+    --active: #58a6ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 2rem;
+  }
+  .sim {
+    max-width: 820px; width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 2rem;
+  }
+  h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; color: var(--text); }
+  .subtitle { font-size: 0.8rem; color: var(--dim); margin-bottom: 1.5rem; }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; margin-bottom: 1.5rem; flex-wrap: wrap;
+  }
+  .stage {
+    padding: 0.6rem 1rem; border-radius: 8px;
+    border: 2px solid var(--border); background: var(--bg);
+    font-size: 0.85rem; font-weight: 600;
+    text-align: center; min-width: 80px;
+    transition: all 0.3s ease;
+    position: relative; z-index: 2;
+  }
+  .stage.active {
+    border-color: var(--active);
+    background: #1a2332;
+    box-shadow: 0 0 16px rgba(88,166,255,0.25);
+    color: var(--active);
+  }
+  .arrow {
+    width: 32px; height: 2px; background: var(--border);
+    margin: 0 4px; flex-shrink: 0; position: relative; z-index: 1;
+  }
+  .arrow::after {
+    content: '▸'; position: absolute; right: -6px; top: -8px;
+    font-size: 0.7rem; color: var(--border);
+  }
+
+  /* Decode loop indicator */
+  .decode-loop {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 0.3rem; justify-content: center;
+    font-size: 0.7rem; color: var(--dim);
+  }
+  .loop-arrow {
+    width: 20px; height: 2px; background: var(--dim);
+  }
+  .loop-count {
+    padding: 2px 8px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 0.7rem;
+  }
+  .loop-count.active {
+    border-color: var(--decode); color: var(--decode);
+    background: rgba(210,153,34,0.1);
+  }
+
+  /* Resources */
+  .resources {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .res {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.6rem; background: var(--bg);
+  }
+  .res-label {
+    font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 0.3rem;
+  }
+  .res-bar-bg {
+    height: 8px; background: var(--border); border-radius: 4px;
+    overflow: hidden; margin-bottom: 0.25rem;
+  }
+  .res-bar {
+    height: 100%; border-radius: 4px; width: 0%;
+    transition: width 0.4s ease;
+  }
+  .res-val { font-size: 0.65rem; color: var(--dim); }
+  .res.cpu .res-label { color: var(--cpu); }
+  .res.cpu .res-bar { background: var(--cpu); }
+  .res.ram .res-label { color: var(--ram); }
+  .res.ram .res-bar { background: var(--ram); }
+  .res.gpu .res-label { color: var(--gpu); }
+  .res.gpu .res-bar { background: var(--gpu); }
+  .res.vram .res-label { color: var(--vram); }
+  .res.vram .res-bar { background: var(--vram); }
+
+  /* Token display */
+  .token-area {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;
+    min-height: 80px;
+  }
+  .token-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--dim); margin-bottom: 0.5rem;
+  }
+  .token-row {
+    display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  }
+  .token {
+    padding: 4px 10px; border-radius: 6px; font-size: 0.8rem;
+    border: 1px solid var(--border); background: var(--surface);
+    font-family: monospace; transition: all 0.3s ease;
+  }
+  .token.prefill { border-color: var(--prefill); background: rgba(218,54,51,0.1); }
+  .token.decode { border-color: var(--decode); background: rgba(210,153,34,0.1); }
+  .token.new { border-color: var(--active); background: rgba(88,166,255,0.1); animation: pulse 0.6s ease; }
+  .token.cached { border-color: var(--ram); opacity: 0.6; font-size: 0.7rem; }
+  @keyframes pulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  /* KV cache */
+  .kvcache {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .kvcache-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--dim); white-space: nowrap;
+  }
+  .kvcache-entries {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .kv-cell {
+    width: 14px; height: 14px; border-radius: 3px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: all 0.3s ease;
+  }
+  .kv-cell.filled { background: var(--vram); border-color: var(--vram); }
+
+  /* Status */
+  .status {
+    font-size: 0.8rem; color: var(--text); margin-bottom: 1rem;
+    text-align: center; min-height: 1.2em;
+  }
+  .status .highlight { color: var(--active); }
+
+  /* Controls */
+  .controls {
+    display: flex; gap: 0.75rem; justify-content: center;
+  }
+  button {
+    padding: 0.5rem 1.25rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 0.8rem;
+    cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  button:hover { border-color: var(--dim); background: #1c2128; }
+  button.primary {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(88,166,255,0.1);
+  }
+  button.primary:hover { background: rgba(88,166,255,0.2); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Step indicator dots */
+  .steps {
+    display: flex; gap: 6px; justify-content: center; margin-bottom: 1rem;
+  }
+  .step-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); transition: background 0.3s;
+  }
+  .step-dot.done { background: var(--accent); }
+  .step-dot.current { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+</style>
+</head>
+<body>
+<div class="sim">
+  <h1>LLM Inference Pipeline</h1>
+  <p class="subtitle">Prompt: <strong>"The cat sat"</strong> — watch how it flows through the system</p>
+
+  <!-- Step dots -->
+  <div class="steps" id="stepDots">
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+  </div>
+
+  <!-- Pipeline stages -->
+  <div class="pipeline">
+    <div class="stage" id="s_input">📥 Input</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_tokenize">🔤 Tokenize</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_prefill">⚡ Prefill</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_decode">🔄 Decode</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_output">📤 Output</div>
+  </div>
+  <div class="decode-loop" id="loopInfo">
+    <span class="loop-arrow"></span>
+    <span>loop</span>
+    <span class="loop-count" id="loopCount">0 / 3</span>
+  </div>
+
+  <!-- Resources -->
+  <div class="resources">
+    <div class="res cpu">
+      <div class="res-label">CPU</div>
+      <div class="res-bar-bg"><div class="res-bar" id="barCpu"></div></div>
+      <div class="res-val" id="valCpu">idle</div>
+    </div>
+    <div class="res ram">
+      <div class="res-label">RAM</div>
+      <div class="res-bar-bg"><div class="res-bar" id="barRam"></div></div>
+      <div class="res-val" id="valRam">idle</div>
+    </div>
+    <div class="res gpu">
+      <div class="res-label">GPU Compute</div>
+      <div class="res-bar-bg"><div class="res-bar" id="barGpu"></div></div>
+      <div class="res-val" id="valGpu">idle</div>
+    </div>
+    <div class="res vram">
+      <div class="res-label">VRAM / KV Cache</div>
+      <div class="res-bar-bg"><div class="res-bar" id="barVram"></div></div>
+      <div class="res-val" id="valVram">idle</div>
+    </div>
+  </div>
+
+  <!-- Tokens -->
+  <div class="token-area">
+    <div class="token-label">Tokens</div>
+    <div class="token-row" id="tokenRow">
+      <span style="color:var(--dim); font-size:0.8rem;">Waiting for input...</span>
+    </div>
+  </div>
+
+  <!-- KV Cache -->
+  <div class="kvcache">
+    <span class="kvcache-label">KV Cache entries:</span>
+    <span class="kvcache-entries" id="kvEntries">
+      <span style="color:var(--dim); font-size:0.75rem;">empty</span>
+    </span>
+  </div>
+
+  <!-- Status -->
+  <div class="status" id="status">Click <span class="highlight">Auto</span> to run the full pipeline, or <span class="highlight">Step</span> to walk through one stage at a time.</div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="primary" id="btnAuto" onclick="toggleAuto()">▶ Auto</button>
+    <button id="btnStep" onclick="step()">⏭ Step</button>
+    <button id="btnReset" onclick="reset()">↺ Reset</button>
+  </div>
+</div>
+
+<script>
+// --- State ---
+const TOKENS = [
+  { id: 576,  text: 'The' },
+  { id: 3797, text: ' cat' },
+  { id: 7236, text: ' sat' },
+];
+const OUTPUT = [
+  { id: 389,  text: ' on' },
+  { id: 278,  text: ' the' },
+  { id: 3098, text: ' mat' },
+];
+
+const TOTAL_STEPS = 7; // 0:idle, 1:input, 2:tokenize, 3:prefill, 4-6:decode steps
+let step = 0;
+let autoTimer = null;
+let decodeIdx = 0;
+
+// --- DOM refs ---
+const els = {
+  s_input:    document.getElementById('s_input'),
+  s_tokenize: document.getElementById('s_tokenize'),
+  s_prefill:  document.getElementById('s_prefill'),
+  s_decode:   document.getElementById('s_decode'),
+  s_output:   document.getElementById('s_output'),
+  barCpu:  document.getElementById('barCpu'),
+  valCpu:  document.getElementById('valCpu'),
+  barRam:  document.getElementById('barRam'),
+  valRam:  document.getElementById('valRam'),
+  barGpu:  document.getElementById('barGpu'),
+  valGpu:  document.getElementById('valGpu'),
+  barVram: document.getElementById('barVram'),
+  valVram: document.getElementById('valVram'),
+  tokenRow:  document.getElementById('tokenRow'),
+  kvEntries: document.getElementById('kvEntries'),
+  status:    document.getElementById('status'),
+  loopCount: document.getElementById('loopCount'),
+  loopInfo:  document.getElementById('loopInfo'),
+  btnAuto:   document.getElementById('btnAuto'),
+  btnStep:   document.getElementById('btnStep'),
+  stepDots:  document.getElementById('stepDots').children,
+};
+
+function clearActive() {
+  Object.values(els).forEach(el => {
+    if (el && el.classList) el.classList.remove('active');
+  });
+}
+
+function setRes(cpu, ram, gpu, vram) {
+  const set = (bar, val, pct, label) => {
+    bar.style.width = pct + '%';
+    val.textContent = label;
+  };
+  set(els.barCpu,  els.valCpu,  cpu,  cpu  === 0 ? 'idle' : cpu + '%');
+  set(els.barRam,  els.valRam,  ram,  ram  === 0 ? 'idle' : ram + '%');
+  set(els.barGpu,  els.valGpu,  gpu,  gpu  === 0 ? 'idle' : gpu + '%');
+  set(els.barVram, els.valVram, vram, vram === 0 ? 'idle' : vram + '%');
+}
+
+function setStatus(msg) { els.status.innerHTML = msg; }
+function setTokens(html) { els.tokenRow.innerHTML = html; }
+function setKV(html) { els.kvEntries.innerHTML = html; }
+
+function setDots(n) {
+  for (let i = 0; i < els.stepDots.length; i++) {
+    els.stepDots[i].classList.remove('done', 'current');
+    if (i < n) els.stepDots[i].classList.add('done');
+    if (i === n) els.stepDots[i].classList.add('current');
+  }
+}
+
+// --- Step implementations ---
+function doIdle() {
+  clearActive();
+  setRes(0,0,0,0);
+  setTokens('<span style="color:var(--dim); font-size:0.8rem;">Waiting for input...</span>');
+  setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
+  setStatus('Click <span class="highlight">Auto</span> to run the full pipeline, or <span class="highlight">Step</span> to walk through one stage at a time.');
+  els.loopInfo.style.opacity = '0.3';
+  els.loopCount.textContent = '0 / ' + OUTPUT.length;
+  els.loopCount.classList.remove('active');
+  setDots(0);
+}
+
+function doInput() {
+  clearActive();
+  els.s_input.classList.add('active');
+  setRes(5,10,0,0);
+  setTokens('<span style="color:var(--text); font-size:1rem; font-style:italic;">"The cat sat"</span>');
+  setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
+  setStatus('📥 <span class="highlight">Input</span> — user submits the prompt text.<br><span style="color:var(--dim); font-size:0.75rem;">CPU &amp; RAM hold the raw string. GPU is idle.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  setDots(1);
+}
+
+function doTokenize() {
+  clearActive();
+  els.s_tokenize.classList.add('active');
+  setRes(40,25,0,0);
+  let html = '';
+  TOKENS.forEach(t => {
+    html += `<span class="token" style="border-color:var(--cpu);">${t.id}</span>`;
+  });
+  setTokens(html + '<span style="color:var(--dim); margin-left:6px; font-size:0.7rem;">← token IDs</span>');
+  setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
+  setStatus('🔤 <span class="highlight">Tokenize</span> — CPU converts text to token IDs: "The cat sat" → [576, 3797, 7236]<br><span style="color:var(--dim); font-size:0.75rem;">This is a fast CPU-bound step. Tokenizer runs on CPU.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  setDots(2);
+}
+
+function doPrefill() {
+  clearActive();
+  els.s_prefill.classList.add('active');
+  setRes(5,15,95,70);
+  let html = '';
+  TOKENS.forEach(t => {
+    html += `<span class="token prefill">${t.id}<br><small>${t.text}</small></span>`;
+  });
+  html += '<span style="font-size:1.5rem; margin:0 4px;">→</span>';
+  html += `<span class="token new">${OUTPUT[0].id}<br><small>${OUTPUT[0].text}</small></span>`;
+  // V
+  setTokens(html);
+  // KV cache built
+  let kvHtml = '';
+  TOKENS.forEach((_, i) => {
+    kvHtml += `<div class="kv-cell filled" title="K${i+1} V${i+1}"></div>`;
+  });
+  setKV(kvHtml + '<span style="color:var(--dim); margin-left:4px; font-size:0.7rem;">3 entries built</span>');
+  setStatus('⚡ <span class="highlight">Prefill</span> — all 3 tokens run through the model <em>simultaneously</em>.<br><span style="color:var(--dim); font-size:0.75rem;">GPU compute spikes. KV cache is built (stored in VRAM). First output token appears: " on".<br><strong>Compute-bound:</strong> GPU is doing heavy matrix math.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  els.loopCount.textContent = '1 / ' + OUTPUT.length;
+  setDots(3);
+}
+
+function doDecodeStep(idx) {
+  clearActive();
+  els.s_decode.classList.add('active');
+
+  // During decode, GPU is busy but more moderate (memory-bound)
+  setRes(3,10,55,40 + idx * 15);
+
+  // Show all tokens so far
+  let html = '';
+  // Input tokens (cached)
+  TOKENS.forEach(t => {
+    html += `<span class="token cached">${t.id}</span>`;
+  });
+  // Previously generated output tokens (cached)
+  for (let i = 0; i < idx; i++) {
+    html += `<span class="token cached">${OUTPUT[i].id}</span>`;
+  }
+  // New token being generated
+  html += `<span class="token new">${OUTPUT[idx].id}<br><small>${OUTPUT[idx].text}</small></span>`;
+  // Show what's being read
+  html += '<span style="color:var(--dim); margin-left:8px; font-size:0.7rem;">← reads KV cache</span>';
+  setTokens(html);
+
+  // KV cache grows
+  let kvHtml = '';
+  const totalKV = TOKENS.length + idx;
+  for (let i = 0; i < totalKV; i++) {
+    kvHtml += `<div class="kv-cell filled" title="K${i+1} V${i+1}"></div>`;
+  }
+  setKV(kvHtml + `<span style="color:var(--dim); margin-left:4px; font-size:0.7rem;">${totalKV} entries — growing each step</span>`);
+
+  const tokenNum = idx + 1;
+  setStatus('🔄 <span class="highlight">Decode step ' + tokenNum + '/' + OUTPUT.length + '</span> — generating token: <span style="color:var(--active);">"' + OUTPUT[idx].text.trim() + '"</span><br><span style="color:var(--dim); font-size:0.75rem;">Only the NEW token needs fresh GPU compute. All previous tokens reuse their KV cache entries.<br><strong>Memory-bound:</strong> GPU spends most time reading the growing KV cache from VRAM.</span>');
+
+  els.loopInfo.style.opacity = '1';
+  els.loopCount.textContent = tokenNum + ' / ' + OUTPUT.length;
+  els.loopCount.classList.add('active');
+  els.loopInfo.querySelector('.loop-arrow').style.background = 'var(--decode)';
+  setDots(3 + idx);
+}
+
+function doDetokenize() {
+  clearActive();
+  els.s_output.classList.add('active');
+  setRes(30,15,0,20);
+
+  // Show all tokens
+  let html = '';
+  TOKENS.forEach(t => { html += `<span class="token cached">${t.id}</span>`; });
+  OUTPUT.forEach(t => { html += `<span class="token cached">${t.id}</span>`; });
+  html += '<span style="font-size:1.5rem; margin:0 4px;">→</span>';
+  html += '<span style="color:var(--ram); font-size:1rem; font-style:italic;">"The cat sat on the mat"</span>';
+  setTokens(html);
+
+  // Final KV cache
+  let kvHtml = '';
+  for (let i = 0; i < TOKENS.length + OUTPUT.length; i++) {
+    kvHtml += `<div class="kv-cell filled" title="K${i+1} V${i+1}"></div>`;
+  }
+  setKV(kvHtml + '<span style="color:var(--dim); margin-left:4px; font-size:0.7rem;">6 total entries (freed after request)</span>');
+
+  setStatus('📤 <span class="highlight">Detokenize &amp; Output</span> — CPU converts token IDs back to text.<br><span style="color:var(--dim); font-size:0.75rem;">Final: "The cat sat on the mat" — KV cache is freed, GPU goes idle.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  setDots(6);
+}
+
+// --- Step state machine ---
+function step() {
+  if (autoTimer) return; // don't mix auto + manual
+
+  // step numbering:
+  // 0 idle, 1 input, 2 tokenize, 3 prefill, 4 decode[0], 5 decode[1], 6 decode[2], 7 detokenize
+  //    idle returned by reset
+  const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
+
+  if (step < actions.length - 1) {
+    step++;
+    actions[step]();
+  }
+
+  if (step >= actions.length - 1) {
+    els.btnStep.disabled = true;
+  }
+}
+
+function reset() {
+  stopAuto();
+  step = 0;
+  decodeIdx = 0;
+  doIdle();
+  els.btnStep.disabled = false;
+}
+
+// --- Auto play ---
+function toggleAuto() {
+  if (autoTimer) { stopAuto(); return; }
+
+  reset();
+  els.btnAuto.textContent = '⏸ Stop';
+  els.btnAuto.classList.remove('primary');
+  els.btnStep.disabled = true;
+
+  const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
+
+  let i = 0;
+  function tick() {
+    if (i >= actions.length) { stopAuto(); return; }
+    actions[i]();
+    step = i;
+    i++;
+
+    // Adjust timing: longer pauses for prefill/decode to let viewer read
+    let delay = 1200;
+    if (i === 4) delay = 1500; // prefill — let it sink in
+    if (i >= 5 && i <= actions.length - 2) delay = 1800; // decode steps — slower
+
+    autoTimer = setTimeout(tick, delay);
+  }
+  // Small initial delay so viewer sees the fresh start
+  autoTimer = setTimeout(tick, 400);
+}
+
+function stopAuto() {
+  if (autoTimer) clearTimeout(autoTimer);
+  autoTimer = null;
+  els.btnAuto.textContent = '▶ Auto';
+  els.btnAuto.classList.add('primary');
+  if (step < 7) els.btnStep.disabled = false;
+}
+
+// --- Init ---
+doIdle();
+</script>
+</body>
+</html>
