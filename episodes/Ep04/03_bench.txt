@@ -1,0 +1,35 @@
+============ Serving Benchmark Result ============
+Successful requests:                     20        
+Failed requests:                         0         
+Request rate configured (RPS):           1.00      
+Benchmark duration (s):                  29.02     
+Total input tokens:                      10240     
+Total generated tokens:                  2560      
+Request throughput (req/s):              0.69      
+Output token throughput (tok/s):         88.20     
+Peak output token throughput (tok/s):    68.00     
+Peak concurrent requests:                12.00     
+Total token throughput (tok/s):          441.02    
+---------------Time to First Token----------------
+Mean TTFT (ms):                          562.28    
+Median TTFT (ms):                        510.73    
+P99 TTFT (ms):                           910.52    
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          77.24     
+Median TPOT (ms):                        79.03     
+P99 TPOT (ms):                           113.27    
+---------------Inter-token Latency----------------
+Mean ITL (ms):                           163.09    
+Median ITL (ms):                         157.17    
+P99 ITL (ms):                            384.83    
+---------------Speculative Decoding---------------
+Acceptance rate (%):                     56.36     
+Acceptance length:                       2.13      
+Drafts:                                  1203      
+Draft tokens:                            2406      
+Accepted tokens:                         1356      
+Per-position acceptance (%):
+  Position 0:                            64.84     
+  Position 1:                            47.88     
+==================================================
+ramshreyas@aitopatom-0a62:~/EXD$ 

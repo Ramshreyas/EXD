@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Inference — Pipeline Simulator</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --dim: #8b949e;
+    --accent: #58a6ff;
+    --cpu: #f0883e;
+    --ram: #3fb950;
+    --gpu: #bc8cff;
+    --vram: #f778ba;
+    --prefill: #da3633;
+    --decode: #d29922;
+    --active: #58a6ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 2rem;
+  }
+  .sim {
+    max-width: 820px; width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 2rem;
+  }
+  h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; color: var(--text); }
+  .subtitle { font-size: 0.8rem; color: var(--dim); margin-bottom: 1.5rem; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0; margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+  .tab-btn {
+    padding: 0.5rem 1.25rem; border: none; border-bottom: 2px solid transparent;
+    background: transparent; color: var(--dim); font-size: 0.85rem;
+    cursor: pointer; font-family: inherit; margin-bottom: -2px;
+    transition: all 0.2s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent); border-bottom-color: var(--accent);
+    background: transparent;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.visible { display: block; }
+
+  /* ---- Concurrency Tab Styles ---- */
+  .conc-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 1rem; gap: 1rem;
+  }
+  .conc-meters {
+    display: flex; gap: 1.5rem; flex-shrink: 0;
+  }
+  .conc-meter {
+    text-align: center;
+  }
+  .conc-meter-label {
+    font-size: 0.6rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--dim); margin-bottom: 0.2rem;
+  }
+  .conc-meter-bar {
+    width: 60px; height: 8px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 4px;
+    overflow: hidden; margin-bottom: 0.15rem;
+  }
+  .conc-meter-fill {
+    height: 100%; border-radius: 3px; transition: width 0.4s ease;
+  }
+  .conc-meter-fill.gpu-util { background: var(--gpu); }
+  .conc-meter-fill.vram-usage { background: var(--vram); }
+  .conc-meter-val {
+    font-size: 0.7rem; font-weight: 600; font-family: monospace;
+  }
+  .conc-legend {
+    display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.65rem;
+    color: var(--dim);
+  }
+  .conc-legend span { display: flex; align-items: center; gap: 4px; }
+  .conc-legend-dot {
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+  }
+  .conc-legend-dot.prefill-dot { background: var(--prefill); }
+  .conc-legend-dot.decode-dot { background: var(--decode); }
+  .conc-legend-dot.idle-dot { background: var(--border); }
+  .conc-legend-dot.wait-dot { background: var(--dim); }
+
+  /* Swimlane */
+  .swimlane {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden; margin-bottom: 1rem;
+  }
+  .swimlane-row {
+    display: flex; align-items: center;
+    border-bottom: 1px solid var(--border);
+    min-height: 36px;
+  }
+  .swimlane-row:last-child { border-bottom: none; }
+  .swimlane-label {
+    width: 100px; flex-shrink: 0; padding: 0.5rem 0.75rem;
+    font-size: 0.7rem; font-weight: 600;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .swimlane-label .user-icon { margin-right: 4px; }
+  .swimlane-track {
+    flex: 1; display: flex; position: relative;
+    height: 100%; min-height: 36px;
+  }
+  .swimlane-block {
+    position: absolute; top: 3px; bottom: 3px;
+    border-radius: 4px; display: flex; align-items: center;
+    justify-content: center; font-size: 0.6rem; font-weight: 600;
+    transition: all 0.3s ease; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+  }
+  .swimlane-block.prefill-block {
+    background: rgba(218,54,51,0.25);
+    border: 1px solid var(--prefill);
+    color: #f09090;
+  }
+  .swimlane-block.decode-block {
+    background: rgba(210,153,34,0.2);
+    border: 1px solid var(--decode);
+    color: #e0c060;
+  }
+  .swimlane-block.wait-block {
+    background: rgba(139,148,158,0.1);
+    border: 1px dashed var(--dim);
+    color: var(--dim);
+  }
+  .swimlane-block.input-block {
+    background: rgba(240,136,62,0.15);
+    border: 1px solid var(--cpu);
+    color: var(--cpu);
+  }
+
+  /* GPU queue */
+  .gpu-queue {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .gpu-queue-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--dim); white-space: nowrap;
+  }
+  .gpu-queue-slots {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .gpu-slot {
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 0.65rem; border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .gpu-slot.busy-prefill {
+    border-color: var(--prefill); background: rgba(218,54,51,0.15);
+    color: var(--prefill);
+  }
+  .gpu-slot.busy-decode {
+    border-color: var(--decode); background: rgba(210,153,34,0.15);
+    color: var(--decode);
+  }
+
+  .conc-status {
+    font-size: 0.75rem; color: var(--dim); margin-bottom: 1rem;
+    text-align: center; min-height: 1.2em; line-height: 1.5;
+  }
+  .conc-status .highlight { color: var(--active); }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; margin-bottom: 1.5rem; flex-wrap: wrap;
+  }
+  .stage {
+    padding: 0.6rem 1rem; border-radius: 8px;
+    border: 2px solid var(--border); background: var(--bg);
+    font-size: 0.85rem; font-weight: 600;
+    text-align: center; min-width: 80px;
+    transition: all 0.3s ease;
+    position: relative; z-index: 2;
+  }
+  .stage.active {
+    border-color: var(--active);
+    background: #1a2332;
+    box-shadow: 0 0 16px rgba(88,166,255,0.25);
+    color: var(--active);
+  }
+  .arrow {
+    width: 32px; height: 2px; background: var(--border);
+    margin: 0 4px; flex-shrink: 0; position: relative; z-index: 1;
+  }
+  .arrow::after {
+    content: '▸'; position: absolute; right: -6px; top: -8px;
+    font-size: 0.7rem; color: var(--border);
+  }
+
+  /* Decode loop indicator */
+  .decode-loop {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 0.3rem; justify-content: center;
+    font-size: 0.7rem; color: var(--dim);
+  }
+  .loop-arrow {
+    width: 20px; height: 2px; background: var(--dim);
+  }
+  .loop-count {
+    padding: 2px 8px; border: 1px solid var(--border);
+    border-radius: 4px; font-size: 0.7rem;
+  }
+  .loop-count.active {
+    border-color: var(--decode); color: var(--decode);
+    background: rgba(210,153,34,0.1);
+  }
+
+  /* Resources */
+  .resources {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .res {
+    border: 2px solid var(--border); border-radius: 8px;
+    padding: 0.6rem 0.4rem; background: var(--bg); text-align: center;
+    transition: all 0.3s ease;
+  }
+  .res-label {
+    font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 0.15rem;
+  }
+  .res-status { font-size: 0.65rem; color: var(--dim); }
+  .res.cpu .res-label { color: var(--cpu); }
+  .res.ram .res-label { color: var(--ram); }
+  .res.gpu .res-label { color: var(--gpu); }
+  .res.vram .res-label { color: var(--vram); }
+  .res.active.cpu { border-color: var(--cpu); box-shadow: 0 0 10px rgba(240,136,62,0.25); }
+  .res.active.ram { border-color: var(--ram); box-shadow: 0 0 10px rgba(63,185,80,0.25); }
+  .res.active.gpu { border-color: var(--gpu); box-shadow: 0 0 10px rgba(188,140,255,0.25); }
+  .res.active.vram { border-color: var(--vram); box-shadow: 0 0 10px rgba(247,120,186,0.25); }
+  .res.active .res-status { color: inherit; }
+
+  /* Token display */
+  .token-area {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;
+    min-height: 80px;
+  }
+  .token-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--dim); margin-bottom: 0.5rem;
+  }
+  .token-row {
+    display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  }
+  .token {
+    padding: 4px 10px; border-radius: 6px; font-size: 0.8rem;
+    border: 1px solid var(--border); background: var(--surface);
+    font-family: monospace; transition: all 0.3s ease;
+  }
+  .token.prefill { border-color: var(--prefill); background: rgba(218,54,51,0.1); }
+  .token.decode { border-color: var(--decode); background: rgba(210,153,34,0.1); }
+  .token.new { border-color: var(--active); background: rgba(88,166,255,0.1); animation: pulse 0.6s ease; }
+  .token.cached { border-color: var(--ram); opacity: 0.6; font-size: 0.7rem; }
+  @keyframes pulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  /* KV cache */
+  .kvcache {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .kvcache-label {
+    font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--dim); white-space: nowrap;
+  }
+  .kvcache-entries {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .kv-cell {
+    width: 14px; height: 14px; border-radius: 3px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: all 0.3s ease;
+  }
+  .kv-cell.filled { background: var(--vram); border-color: var(--vram); }
+
+  /* Status */
+  .status {
+    font-size: 0.8rem; color: var(--text); margin-bottom: 1rem;
+    text-align: center; min-height: 1.2em;
+  }
+  .status .highlight { color: var(--active); }
+
+  /* Controls */
+  .controls {
+    display: flex; gap: 0.75rem; justify-content: center;
+  }
+  button {
+    padding: 0.5rem 1.25rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 0.8rem;
+    cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  button:hover { border-color: var(--dim); background: #1c2128; }
+  button.primary {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(88,166,255,0.1);
+  }
+  button.primary:hover { background: rgba(88,166,255,0.2); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Step indicator dots */
+  .steps {
+    display: flex; gap: 6px; justify-content: center; margin-bottom: 1rem;
+  }
+  .step-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); transition: background 0.3s;
+  }
+  .step-dot.done { background: var(--accent); }
+  .step-dot.current { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+</style>
+</head>
+<body>
+<div class="sim">
+  <h1>LLM Inference — Interactive Simulator</h1>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('pipeline')">🔬 Pipeline View</button>
+    <button class="tab-btn" onclick="switchTab('concurrency')">👥 Multi-User Concurrency</button>
+  </div>
+
+  <!-- ===== TAB 1: Pipeline View ===== -->
+  <div class="tab-panel visible" id="tab-pipeline">
+  <p class="subtitle">Prompt: <strong>"The cat sat"</strong> — watch how it flows through the system</p>
+
+  <!-- Step dots -->
+  <div class="steps" id="stepDots">
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+    <div class="step-dot"></div>
+  </div>
+
+  <!-- Pipeline stages -->
+  <div class="pipeline">
+    <div class="stage" id="s_input">📥 Input</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_tokenize">🔤 Tokenize</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_prefill">⚡ Prefill</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_decode">🔄 Decode</div>
+    <div class="arrow"></div>
+    <div class="stage" id="s_output">📤 Output</div>
+  </div>
+  <div class="decode-loop" id="loopInfo">
+    <span class="loop-arrow"></span>
+    <span>loop</span>
+    <span class="loop-count" id="loopCount">0 / 3</span>
+  </div>
+
+  <!-- Resources -->
+  <div class="resources">
+    <div class="res cpu" id="resCpu">
+      <div class="res-label">CPU</div>
+      <div class="res-status">idle</div>
+    </div>
+    <div class="res ram" id="resRam">
+      <div class="res-label">RAM</div>
+      <div class="res-status">idle</div>
+    </div>
+    <div class="res gpu" id="resGpu">
+      <div class="res-label">GPU Compute</div>
+      <div class="res-status">idle</div>
+    </div>
+    <div class="res vram" id="resVram">
+      <div class="res-label">VRAM / KV Cache</div>
+      <div class="res-status">idle</div>
+    </div>
+  </div>
+
+  <!-- Tokens -->
+  <div class="token-area">
+    <div class="token-label">Tokens</div>
+    <div class="token-row" id="tokenRow">
+      <span style="color:var(--dim); font-size:0.8rem;">Waiting for input...</span>
+    </div>
+  </div>
+
+  <!-- KV Cache -->
+  <div class="kvcache">
+    <span class="kvcache-label">KV Cache entries:</span>
+    <span class="kvcache-entries" id="kvEntries">
+      <span style="color:var(--dim); font-size:0.75rem;">empty</span>
+    </span>
+  </div>
+
+  <!-- Status -->
+  <div class="status" id="status">Click <span class="highlight">Auto</span> to run the full pipeline, or use <span class="highlight">Forward</span> / <span class="highlight">Back</span> to walk through one stage at a time.</div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="primary" id="btnAuto" onclick="toggleAuto()">Auto ▶</button>
+    <button id="btnBack" onclick="back()">◀ Back</button>
+    <button id="btnStep" onclick="step()">Forward ▶</button>
+    <button id="btnReset" onclick="reset()">↺ Reset</button>
+  </div>
+  </div><!-- end tab-pipeline -->
+
+  <!-- ===== TAB 2: Multi-User Concurrency ===== -->
+  <div class="tab-panel" id="tab-concurrency">
+  <p class="subtitle">4 concurrent users sharing one GPU — watch batching, queuing &amp; KV cache pressure</p>
+
+  <!-- Meters -->
+  <div class="conc-header">
+    <div class="conc-meters">
+      <div class="conc-meter">
+        <div class="conc-meter-label">GPU Util</div>
+        <div class="conc-meter-bar"><div class="conc-meter-fill gpu-util" id="gpuUtilBar" style="width:0%"></div></div>
+        <div class="conc-meter-val" id="gpuUtilVal">0%</div>
+      </div>
+      <div class="conc-meter">
+        <div class="conc-meter-label">VRAM / KV Cache</div>
+        <div class="conc-meter-bar"><div class="conc-meter-fill vram-usage" id="vramBar" style="width:0%"></div></div>
+        <div class="conc-meter-val" id="vramVal">0 GB</div>
+      </div>
+    </div>
+    <div class="conc-legend">
+      <span><span class="conc-legend-dot prefill-dot"></span> Prefill (compute)</span>
+      <span><span class="conc-legend-dot decode-dot"></span> Decode (memory)</span>
+      <span><span class="conc-legend-dot input-dot" style="background:var(--cpu)"></span> Tokenize</span>
+      <span><span class="conc-legend-dot wait-dot"></span> Queued</span>
+    </div>
+  </div>
+
+  <!-- Swimlane -->
+  <div class="swimlane" id="swimlane">
+  </div>
+
+  <!-- GPU Queue -->
+  <div class="gpu-queue">
+    <span class="gpu-queue-label">GPU Scheduler:</span>
+    <span class="gpu-queue-slots" id="gpuSlots">
+      <span class="gpu-slot" style="color:var(--dim)">idle</span>
+    </span>
+  </div>
+
+  <!-- Status -->
+  <div class="conc-status" id="concStatus">
+    Click <span class="highlight">Start</span> to watch 4 users stream through the pipeline concurrently.
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="primary" id="concBtnAuto" onclick="concToggleAuto()">▶ Start</button>
+    <button id="concBtnBack" onclick="concBack()">◀ Back</button>
+    <button id="concBtnStep" onclick="concStep()">Forward ▶</button>
+    <button id="concBtnReset" onclick="concReset()">↺ Reset</button>
+  </div>
+  </div><!-- end tab-concurrency -->
+
+</div>
+
+<script>
+// --- State ---
+const TOKENS = [
+  { id: 576,  text: 'The' },
+  { id: 3797, text: ' cat' },
+  { id: 7236, text: ' sat' },
+];
+const OUTPUT = [
+  { id: 389,  text: ' on' },
+  { id: 278,  text: ' the' },
+  { id: 3098, text: ' mat' },
+];
+
+const TOTAL_STEPS = 7; // 0:idle, 1:input, 2:tokenize, 3:prefill, 4-6:decode steps
+let currentStep = 0;
+let autoTimer = null;
+let decodeIdx = 0;
+
+// --- DOM refs ---
+const els = {
+  s_input:    document.getElementById('s_input'),
+  s_tokenize: document.getElementById('s_tokenize'),
+  s_prefill:  document.getElementById('s_prefill'),
+  s_decode:   document.getElementById('s_decode'),
+  s_output:   document.getElementById('s_output'),
+  resCpu:  document.getElementById('resCpu'),
+  resRam:  document.getElementById('resRam'),
+  resGpu:  document.getElementById('resGpu'),
+  resVram: document.getElementById('resVram'),
+  tokenRow:  document.getElementById('tokenRow'),
+  kvEntries: document.getElementById('kvEntries'),
+  status:    document.getElementById('status'),
+  loopCount: document.getElementById('loopCount'),
+  loopInfo:  document.getElementById('loopInfo'),
+  btnAuto:   document.getElementById('btnAuto'),
+  btnStep:   document.getElementById('btnStep'),
+  btnBack:   document.getElementById('btnBack'),
+  stepDots:  document.getElementById('stepDots').children,
+};
+
+function clearActive() {
+  Object.values(els).forEach(el => {
+    if (el && el.classList) el.classList.remove('active');
+  });
+}
+
+function setActiveResources(names) {
+  const map = { cpu: els.resCpu, ram: els.resRam, gpu: els.resGpu, vram: els.resVram };
+  for (const [key, el] of Object.entries(map)) {
+    if (names.includes(key)) {
+      el.classList.add('active');
+      el.querySelector('.res-status').textContent = 'active';
+    } else {
+      el.classList.remove('active');
+      el.querySelector('.res-status').textContent = 'idle';
+    }
+  }
+}
+
+function setStatus(msg) { els.status.innerHTML = msg; }
+function setTokens(html) { els.tokenRow.innerHTML = html; }
+function setKV(html) { els.kvEntries.innerHTML = html; }
+
+function setDots(n) {
+  for (let i = 0; i < els.stepDots.length; i++) {
+    els.stepDots[i].classList.remove('done', 'current');
+    if (i < n) els.stepDots[i].classList.add('done');
+    if (i === n) els.stepDots[i].classList.add('current');
+  }
+}
+
+// --- Step implementations ---
+function doIdle() {
+  clearActive();
+  setActiveResources([]);
+  setTokens('<span style="color:var(--dim); font-size:0.8rem;">Waiting for input...</span>');
+  setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
+  setStatus('Click <span class="highlight">Auto</span> to run the full pipeline, or use <span class="highlight">Forward</span> / <span class="highlight">Back</span> to walk through one stage at a time.');
+  els.loopInfo.style.opacity = '0.3';
+  els.loopCount.textContent = '0 / ' + OUTPUT.length;
+  els.loopCount.classList.remove('active');
+  setDots(0);
+}
+
+function doInput() {
+  clearActive();
+  els.s_input.classList.add('active');
+  setActiveResources(['cpu']);
+  setTokens('<span style="color:var(--text); font-size:1rem; font-style:italic;">"The cat sat"</span>');
+  setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
+  setStatus('📥 <span class="highlight">Input</span> — user submits the prompt text.<br><span style="color:var(--dim); font-size:0.75rem;">CPU &amp; RAM hold the raw string. GPU is idle.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  setDots(1);
+}
+
+function doTokenize() {
+  clearActive();
+  els.s_tokenize.classList.add('active');
+  setActiveResources(['cpu', 'ram']);
+  let html = '';
+  TOKENS.forEach(t => {
+    html += `<span class="token" style="border-color:var(--cpu);">${t.id}</span>`;
+  });
+  setTokens(html + '<span style="color:var(--dim); margin-left:6px; font-size:0.7rem;">← token IDs</span>');
+  setKV('<span style="color:var(--dim); font-size:0.75rem;">empty</span>');
+  setStatus('🔤 <span class="highlight">Tokenize</span> — CPU converts text to token IDs: "The cat sat" → [576, 3797, 7236]<br><span style="color:var(--dim); font-size:0.75rem;">This is a fast CPU-bound step. Tokenizer runs on CPU.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  setDots(2);
+}
+
+function doPrefill() {
+  clearActive();
+  els.s_prefill.classList.add('active');
+  setActiveResources(['gpu', 'vram']);
+  let html = '';
+  TOKENS.forEach(t => {
+    html += `<span class="token prefill">${t.id}<br><small>${t.text}</small></span>`;
+  });
+  html += '<span style="font-size:1.5rem; margin:0 4px;">→</span>';
+  html += `<span class="token new">${OUTPUT[0].id}<br><small>${OUTPUT[0].text}</small></span>`;
+  // V
+  setTokens(html);
+  // KV cache built
+  let kvHtml = '';
+  TOKENS.forEach((_, i) => {
+    kvHtml += `<div class="kv-cell filled" title="K${i+1} V${i+1}"></div>`;
+  });
+  setKV(kvHtml + '<span style="color:var(--dim); margin-left:4px; font-size:0.7rem;">3 entries built</span>');
+  setStatus('⚡ <span class="highlight">Prefill</span> — all 3 tokens run through the model <em>simultaneously</em>.<br><span style="color:var(--dim); font-size:0.75rem;">GPU compute spikes. KV cache is built (stored in VRAM). First output token appears: " on".<br><strong>Compute-bound:</strong> GPU is doing heavy matrix math.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  els.loopCount.textContent = '1 / ' + OUTPUT.length;
+  setDots(3);
+}
+
+function doDecodeStep(idx) {
+  clearActive();
+  els.s_decode.classList.add('active');
+
+  // During decode, GPU is busy but more moderate (memory-bound)
+  setActiveResources(['gpu', 'vram']);
+
+  // Show all tokens so far
+  let html = '';
+  // Input tokens (cached)
+  TOKENS.forEach(t => {
+    html += `<span class="token cached">${t.id}</span>`;
+  });
+  // Previously generated output tokens (cached)
+  for (let i = 0; i < idx; i++) {
+    html += `<span class="token cached">${OUTPUT[i].id}</span>`;
+  }
+  // New token being generated
+  html += `<span class="token new">${OUTPUT[idx].id}<br><small>${OUTPUT[idx].text}</small></span>`;
+  // Show what's being read
+  html += '<span style="color:var(--dim); margin-left:8px; font-size:0.7rem;">← reads KV cache</span>';
+  setTokens(html);
+
+  // KV cache grows
+  let kvHtml = '';
+  const totalKV = TOKENS.length + idx;
+  for (let i = 0; i < totalKV; i++) {
+    kvHtml += `<div class="kv-cell filled" title="K${i+1} V${i+1}"></div>`;
+  }
+  setKV(kvHtml + `<span style="color:var(--dim); margin-left:4px; font-size:0.7rem;">${totalKV} entries — growing each step</span>`);
+
+  const tokenNum = idx + 1;
+  setStatus('🔄 <span class="highlight">Decode step ' + tokenNum + '/' + OUTPUT.length + '</span> — generating token: <span style="color:var(--active);">"' + OUTPUT[idx].text.trim() + '"</span><br><span style="color:var(--dim); font-size:0.75rem;">Only the NEW token needs fresh GPU compute. All previous tokens reuse their KV cache entries.<br><strong>Memory-bound:</strong> GPU spends most time reading the growing KV cache from VRAM.</span>');
+
+  els.loopInfo.style.opacity = '1';
+  els.loopCount.textContent = tokenNum + ' / ' + OUTPUT.length;
+  els.loopCount.classList.add('active');
+  els.loopInfo.querySelector('.loop-arrow').style.background = 'var(--decode)';
+  setDots(3 + idx);
+}
+
+function doDetokenize() {
+  clearActive();
+  els.s_output.classList.add('active');
+  setActiveResources(['cpu']);
+
+  // Show all tokens
+  let html = '';
+  TOKENS.forEach(t => { html += `<span class="token cached">${t.id}</span>`; });
+  OUTPUT.forEach(t => { html += `<span class="token cached">${t.id}</span>`; });
+  html += '<span style="font-size:1.5rem; margin:0 4px;">→</span>';
+  html += '<span style="color:var(--ram); font-size:1rem; font-style:italic;">"The cat sat on the mat"</span>';
+  setTokens(html);
+
+  // Final KV cache
+  let kvHtml = '';
+  for (let i = 0; i < TOKENS.length + OUTPUT.length; i++) {
+    kvHtml += `<div class="kv-cell filled" title="K${i+1} V${i+1}"></div>`;
+  }
+  setKV(kvHtml + '<span style="color:var(--dim); margin-left:4px; font-size:0.7rem;">6 total entries (freed after request)</span>');
+
+  setStatus('📤 <span class="highlight">Detokenize &amp; Output</span> — CPU converts token IDs back to text.<br><span style="color:var(--dim); font-size:0.75rem;">Final: "The cat sat on the mat" — KV cache is freed, GPU goes idle.</span>');
+  els.loopInfo.style.opacity = '0.3';
+  setDots(6);
+}
+
+// --- Step state machine ---
+function step() {
+  if (autoTimer) return; // don't mix auto + manual
+
+  // step numbering:
+  // 0 idle, 1 input, 2 tokenize, 3 prefill, 4 decode[0], 5 decode[1], 6 decode[2], 7 detokenize
+  //    idle returned by reset
+  const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
+
+  if (currentStep < actions.length - 1) {
+    currentStep++;
+    actions[currentStep]();
+  }
+
+  if (currentStep >= actions.length - 1) {
+    els.btnStep.disabled = true;
+  }
+  els.btnBack.disabled = (currentStep <= 0);
+}
+
+function back() {
+  if (autoTimer) return;
+  if (currentStep <= 0) return;
+
+  const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
+
+  currentStep--;
+  actions[currentStep]();
+
+  els.btnStep.disabled = false;
+  els.btnBack.disabled = (currentStep <= 0);
+}
+
+function reset() {
+  stopAuto();
+  currentStep = 0;
+  decodeIdx = 0;
+  doIdle();
+  els.btnStep.disabled = false;
+  els.btnBack.disabled = true;
+}
+
+// --- Auto play ---
+function toggleAuto() {
+  if (autoTimer) { stopAuto(); return; }
+
+  reset();
+  els.btnAuto.textContent = '⏸ Stop';
+  els.btnAuto.classList.remove('primary');
+  els.btnStep.disabled = true;
+  els.btnBack.disabled = true;
+
+  const actions = [doIdle, doInput, doTokenize, doPrefill, ...OUTPUT.map((_, i) => () => doDecodeStep(i)), doDetokenize];
+
+  let i = 0;
+  function tick() {
+    if (i >= actions.length) { stopAuto(); return; }
+    actions[i]();
+    currentStep = i;
+    i++;
+
+    // Adjust timing: longer pauses for prefill/decode to let viewer read
+    let delay = 1200;
+    if (i === 4) delay = 1500; // prefill — let it sink in
+    if (i >= 5 && i <= actions.length - 2) delay = 1800; // decode steps — slower
+
+    autoTimer = setTimeout(tick, delay);
+  }
+  // Small initial delay so viewer sees the fresh start
+  autoTimer = setTimeout(tick, 400);
+}
+
+function stopAuto() {
+  if (autoTimer) clearTimeout(autoTimer);
+  autoTimer = null;
+  els.btnAuto.textContent = '▶ Auto';
+  els.btnAuto.classList.add('primary');
+  if (currentStep < 7) els.btnStep.disabled = false;
+  els.btnBack.disabled = (currentStep <= 0);
+}
+
+// --- Init ---
+doIdle();
+
+// ============================================================
+//  CONCURRENCY TAB — Multi-User Timeline Simulator
+// ============================================================
+
+const NUM_USERS = 4;
+const TOTAL_TICKS = 17;
+
+// Each user: { name, icon, prompt, outputTokens, schedule: [{tick, type, label}]
+// Types: 'tokenize', 'prefill', 'decode', 'output', 'wait', 'done'
+const USER_SCHEDULES = [
+  { // User A — arrives immediately, 6 output tokens
+    name: 'A', icon: '🟦', prompt: '"The cat sat"',
+    outputTokens: [' on', ' the', ' mat', ' by', ' the', ' fire'],
+    phases: [
+      { tick: 0, type: 'tokenize', label: 'T' },
+      { tick: 1, type: 'prefill', label: 'PF' },
+      { tick: 3, type: 'decode', label: 'D1', tokenIdx: 0 },
+      { tick: 4, type: 'decode', label: 'D2', tokenIdx: 1 },
+      { tick: 5, type: 'decode', label: 'D3', tokenIdx: 2 },
+      { tick: 6, type: 'decode', label: 'D4', tokenIdx: 3 },
+      { tick: 7, type: 'decode', label: 'D5', tokenIdx: 4 },
+      { tick: 8, type: 'decode', label: 'D6', tokenIdx: 5 },
+      { tick: 9, type: 'output', label: 'O' },
+    ]
+  },
+  { // User B — arrives at t=1, 5 output tokens
+    name: 'B', icon: '🟩', prompt: '"What is the"',
+    outputTokens: [' capital', ' of', ' France', ' today', '?'],
+    phases: [
+      { tick: 1, type: 'tokenize', label: 'T' },
+      { tick: 2, type: 'wait', label: '⋯' },
+      { tick: 3, type: 'prefill', label: 'PF' },
+      { tick: 5, type: 'decode', label: 'D1', tokenIdx: 0 },
+      { tick: 6, type: 'decode', label: 'D2', tokenIdx: 1 },
+      { tick: 7, type: 'decode', label: 'D3', tokenIdx: 2 },
+      { tick: 8, type: 'decode', label: 'D4', tokenIdx: 3 },
+      { tick: 9, type: 'decode', label: 'D5', tokenIdx: 4 },
+      { tick: 10, type: 'output', label: 'O' },
+    ]
+  },
+  { // User C — arrives at t=3, 5 output tokens
+    name: 'C', icon: '🟨', prompt: '"Write a haiku"',
+    outputTokens: [' about', ' spring', ' blossoms', ' falling', ' down'],
+    phases: [
+      { tick: 3, type: 'tokenize', label: 'T' },
+      { tick: 4, type: 'wait', label: '⋯' },
+      { tick: 5, type: 'wait', label: '⋯' },
+      { tick: 6, type: 'prefill', label: 'PF' },
+      { tick: 8, type: 'decode', label: 'D1', tokenIdx: 0 },
+      { tick: 9, type: 'decode', label: 'D2', tokenIdx: 1 },
+      { tick: 10, type: 'decode', label: 'D3', tokenIdx: 2 },
+      { tick: 11, type: 'decode', label: 'D4', tokenIdx: 3 },
+      { tick: 12, type: 'decode', label: 'D5', tokenIdx: 4 },
+      { tick: 13, type: 'output', label: 'O' },
+    ]
+  },
+  { // User D — arrives at t=5, 4 output tokens
+    name: 'D', icon: '🟪', prompt: '"Explain quantum"',
+    outputTokens: [' computing', ' in', ' simple', ' terms'],
+    phases: [
+      { tick: 5, type: 'tokenize', label: 'T' },
+      { tick: 6, type: 'wait', label: '⋯' },
+      { tick: 7, type: 'wait', label: '⋯' },
+      { tick: 8, type: 'prefill', label: 'PF' },
+      { tick: 10, type: 'decode', label: 'D1', tokenIdx: 0 },
+      { tick: 11, type: 'decode', label: 'D2', tokenIdx: 1 },
+      { tick: 12, type: 'decode', label: 'D3', tokenIdx: 2 },
+      { tick: 13, type: 'decode', label: 'D4', tokenIdx: 3 },
+      { tick: 14, type: 'output', label: 'O' },
+    ]
+  },
+];
+
+// Per-tick GPU state
+// At each tick, we compute: gpuActivity (prefill/decode/idle), active users, KV cache entries
+function getGPUActivity(tick) {
+  let prefilling = [];
+  let decoding = [];
+  let totalKV = 0;
+  const inputTokenCounts = { A: 3, B: 3, C: 3, D: 2 }; // rough token counts per prompt
+
+  for (const user of USER_SCHEDULES) {
+    const phase = getUserPhaseAtTick(user, tick);
+    if (phase) {
+      if (phase.type === 'prefill') prefilling.push(user.name);
+      if (phase.type === 'decode') decoding.push(user.name);
+    }
+
+    const inputTokens = inputTokenCounts[user.name] || 2;
+
+    // Count decode tokens generated up to and including this tick
+    let decodeDone = 0;
+    for (const p of user.phases) {
+      if (p.type === 'decode' && p.tick <= tick) decodeDone++;
+    }
+    // KV entries exist after prefill has started (KV built during prefill, fully available after)
+    let prefillStarted = false;
+    for (const p of user.phases) {
+      if (p.type === 'prefill' && p.tick <= tick) prefillStarted = true;
+    }
+    if (prefillStarted || decodeDone > 0) {
+      totalKV += inputTokens + decodeDone;
+    }
+  }
+  return { prefilling, decoding, totalKV };
+}
+
+function getUserPhaseAtTick(user, tick) {
+  // Find the phase that contains this tick (phase lasts until next phase's tick)
+  for (let i = user.phases.length - 1; i >= 0; i--) {
+    if (user.phases[i].tick <= tick) {
+      return user.phases[i];
+    }
+  }
+  return null;
+}
+
+// For rendering: we need contiguous blocks, not just per-tick points.
+// Prefill lasts 2 ticks, decode lasts 1 tick each, etc.
+// Build display blocks from the phase list:
+function buildDisplayBlocks(user) {
+  const blocks = [];
+  for (let i = 0; i < user.phases.length; i++) {
+    const phase = user.phases[i];
+    let startTick = phase.tick;
+    // Determine end tick: next phase's tick - 1, or if last phase, startTick
+    let endTick = startTick;
+    if (i < user.phases.length - 1) {
+      endTick = user.phases[i + 1].tick - 1;
+    }
+    // But for decode, each is exactly 1 tick
+    if (phase.type === 'decode' || phase.type === 'tokenize' || phase.type === 'output') {
+      endTick = startTick;
+    }
+    if (phase.type === 'prefill') {
+      // prefill spans from startTick to the next non-wait phase - 1
+      // Find next real phase after any wait phases
+      for (let j = i + 1; j < user.phases.length; j++) {
+        if (user.phases[j].type !== 'wait') {
+          endTick = user.phases[j].tick - 1;
+          break;
+        }
+      }
+    }
+    if (phase.type === 'wait') {
+      endTick = startTick;
+      // If there are consecutive waits, merge them
+    }
+    blocks.push({ ...phase, startTick, endTick });
+  }
+  return blocks;
+}
+
+// Merge consecutive same-type blocks
+function mergeBlocks(blocks) {
+  const merged = [];
+  for (const b of blocks) {
+    const last = merged[merged.length - 1];
+    if (last && last.type === b.type && last.endTick + 1 === b.startTick) {
+      last.endTick = b.endTick;
+    } else {
+      merged.push({ ...b });
+    }
+  }
+  return merged;
+}
+
+// Precompute display blocks for all users
+const USER_BLOCKS = USER_SCHEDULES.map(u => {
+  const blocks = buildDisplayBlocks(u);
+  return mergeBlocks(blocks);
+});
+
+// --- Concurrency state ---
+let concTick = -1;
+let concAutoTimer = null;
+let concRunning = false;
+
+// DOM refs for concurrency tab
+function getConcEls() {
+  return {
+    swimlane: document.getElementById('swimlane'),
+    gpuSlots: document.getElementById('gpuSlots'),
+    gpuUtilBar: document.getElementById('gpuUtilBar'),
+    gpuUtilVal: document.getElementById('gpuUtilVal'),
+    vramBar: document.getElementById('vramBar'),
+    vramVal: document.getElementById('vramVal'),
+    status: document.getElementById('concStatus'),
+    btnAuto: document.getElementById('concBtnAuto'),
+    btnBack: document.getElementById('concBtnBack'),
+    btnStep: document.getElementById('concBtnStep'),
+    btnReset: document.getElementById('concBtnReset'),
+  };
+}
+
+function renderConcTick(tick) {
+  const els = getConcEls();
+  const gpu = getGPUActivity(tick);
+
+  // --- Build swimlane HTML ---
+  let html = '';
+  for (let ui = 0; ui < NUM_USERS; ui++) {
+    const user = USER_SCHEDULES[ui];
+    const blocks = USER_BLOCKS[ui];
+
+    html += '<div class="swimlane-row">';
+    html += `<div class="swimlane-label"><span class="user-icon">${user.icon}</span> ${user.name}: ${user.prompt}</div>`;
+    html += '<div class="swimlane-track" style="position:relative;">';
+
+    // Draw blocks
+    for (const block of blocks) {
+      const leftPct = (block.startTick / TOTAL_TICKS) * 100;
+      const widthPct = ((block.endTick - block.startTick + 1) / TOTAL_TICKS) * 100;
+
+      let cls = '';
+      if (block.type === 'prefill') cls = 'prefill-block';
+      else if (block.type === 'decode') cls = 'decode-block';
+      else if (block.type === 'wait') cls = 'wait-block';
+      else if (block.type === 'tokenize' || block.type === 'output') cls = 'input-block';
+      else continue;
+
+      // Highlight if this block is active at current tick
+      const isActive = tick >= block.startTick && tick <= block.endTick;
+      const opacity = isActive ? '1' : (tick > block.endTick ? '0.5' : '0.35');
+      const zIdx = isActive ? '3' : '1';
+
+      // Label for decode: show which token
+      let label = block.label || '';
+      if (block.type === 'decode' && block.tokenIdx !== undefined) {
+        label = `D${block.tokenIdx + 1}`;
+      }
+      if (block.type === 'prefill') label = 'PF';
+      if (block.type === 'tokenize') label = 'T';
+      if (block.type === 'output') label = 'O';
+      if (block.type === 'wait') label = '';
+
+      if (widthPct > 1.5) {
+        html += `<div class="swimlane-block ${cls}" style="left:${leftPct}%;width:${widthPct}%;opacity:${opacity};z-index:${zIdx};">${label}</div>`;
+      }
+    }
+
+    // Tick cursor line if user is active
+    const phase = getUserPhaseAtTick(user, tick);
+    if (phase && phase.type !== 'done') {
+      const cursorPct = ((tick + 0.5) / TOTAL_TICKS) * 100;
+      html += `<div style="position:absolute;left:${cursorPct}%;top:0;bottom:0;width:2px;background:var(--active);z-index:10;opacity:0.8;"></div>`;
+    }
+
+    html += '</div></div>';
+  }
+  els.swimlane.innerHTML = html;
+
+  // --- GPU utilization ---
+  let gpuPct = 0;
+  if (gpu.prefilling.length > 0) gpuPct = 90;
+  else if (gpu.decoding.length > 0) gpuPct = Math.min(30 + gpu.decoding.length * 15, 85);
+  els.gpuUtilBar.style.width = gpuPct + '%';
+  els.gpuUtilVal.textContent = gpuPct + '%';
+
+  // --- VRAM usage (KB per KV entry, rough) ---
+  const kvGB = (gpu.totalKV * 0.4).toFixed(1);
+  const vramPct = Math.min(gpu.totalKV * 4, 100);
+  els.vramBar.style.width = vramPct + '%';
+  els.vramVal.textContent = kvGB + ' GB';
+
+  // --- GPU scheduler slots ---
+  let slotHTML = '';
+  if (gpu.prefilling.length > 0) {
+    slotHTML = gpu.prefilling.map(u => `<span class="gpu-slot busy-prefill">⚡ ${u} prefill</span>`).join('');
+  } else if (gpu.decoding.length > 0) {
+    slotHTML = `<span class="gpu-slot busy-decode">🔄 batch decode (${gpu.decoding.join(',')})</span>`;
+  } else {
+    slotHTML = '<span class="gpu-slot" style="color:var(--dim)">idle</span>';
+  }
+  els.gpuSlots.innerHTML = slotHTML;
+
+  // --- Status text ---
+  let statusMsg = '';
+  const tickLabel = tick >= 0 ? `Tick ${tick}` : '';
+  if (tick < 0) {
+    statusMsg = 'Click <span class="highlight">Start</span> to watch 4 users stream through the pipeline concurrently.';
+  } else if (gpu.prefilling.length > 0 && gpu.decoding.length > 0) {
+    statusMsg = `<span class="highlight">${tickLabel}:</span> GPU <span style="color:var(--prefill);">prefills</span> for ${gpu.prefilling.join(', ')} <strong>while</strong> <span style="color:var(--decode);">batching decode</span> for ${gpu.decoding.join(', ')} — continuous batching in action!`;
+  } else if (gpu.prefilling.length > 0) {
+    statusMsg = `<span class="highlight">${tickLabel}:</span> GPU is <span style="color:var(--prefill);">prefilling</span> for ${gpu.prefilling.join(', ')} — compute-bound, KV cache building.`;
+  } else if (gpu.decoding.length > 0) {
+    statusMsg = `<span class="highlight">${tickLabel}:</span> GPU is <span style="color:var(--decode);">batching decode</span> for ${gpu.decoding.join(', ')} — memory-bound, reading KV cache.`;
+  } else if (tick >= 15) {
+    statusMsg = `<span class="highlight">${tickLabel}:</span> All requests complete. GPU idle. KV cache freed.`;
+  } else {
+    statusMsg = `<span class="highlight">${tickLabel}:</span> GPU idle — requests tokenizing or queued.`;
+  }
+
+  // Add throughput note at end
+  const completed = USER_SCHEDULES.filter(u => {
+    const last = u.phases[u.phases.length - 1];
+    return tick >= last.tick;
+  }).length;
+  if (tick >= 14 && completed === 4) {
+    statusMsg += '<br><span style="color:var(--ram);">✓ All 4 requests completed in 14 ticks. Serially would take ~36 ticks. <strong>~2.6× throughput</strong> via concurrency.</span>';
+  }
+
+  els.status.innerHTML = statusMsg;
+
+  // --- Update buttons ---
+  els.btnStep.disabled = tick >= TOTAL_TICKS - 1;
+  els.btnBack.disabled = tick <= 0;
+}
+
+function concStep() {
+  if (concAutoTimer) return;
+  if (concTick >= TOTAL_TICKS - 1) return;
+  concTick++;
+  renderConcTick(concTick);
+}
+
+function concBack() {
+  if (concAutoTimer) return;
+  if (concTick <= 0) return;
+  concTick--;
+  renderConcTick(concTick);
+}
+
+function concReset() {
+  concStopAuto();
+  concTick = -1;
+  const els = getConcEls();
+  els.gpuUtilBar.style.width = '0%';
+  els.gpuUtilVal.textContent = '0%';
+  els.vramBar.style.width = '0%';
+  els.vramVal.textContent = '0 GB';
+  els.gpuSlots.innerHTML = '<span class="gpu-slot" style="color:var(--dim)">idle</span>';
+  els.status.innerHTML = 'Click <span class="highlight">Start</span> to watch 4 users stream through the pipeline concurrently.';
+  els.btnStep.disabled = false;
+  els.btnBack.disabled = true;
+  renderConcTick(-1);
+}
+
+function concToggleAuto() {
+  if (concAutoTimer) { concStopAuto(); return; }
+
+  concReset();
+  concTick = -1;
+  const els = getConcEls();
+  els.btnAuto.textContent = '⏸ Stop';
+  els.btnAuto.classList.remove('primary');
+  els.btnStep.disabled = true;
+  els.btnBack.disabled = true;
+  els.btnReset.disabled = false;
+  concRunning = true;
+
+  const delays = [
+    600,  // t0: A tokenizes
+    1000, // t1: A prefill (compute-heavy)
+    1000, // t2: A prefill cont, B waits
+    900,  // t3: A decode1, B prefill, C arrives
+    700,  // t4: A decode2, B prefill cont
+    700,  // t5: A decode3, B decode1, D arrives
+    900,  // t6: A decode4, B decode2, C prefill
+    800,  // t7: A decode5, B decode3, C prefill cont
+    1000, // t8: A decode6, B decode4, C decode1, D prefill (4 users active!)
+    800,  // t9: A output, B decode5, C decode2, D prefill cont
+    900,  // t10: B output, C decode3, D decode1
+    700,  // t11: C decode4, D decode2
+    700,  // t12: C decode5, D decode3
+    800,  // t13: C output, D decode4
+    900,  // t14: D output — all done
+    1800, // t15-16: idle, show summary
+  ];
+
+  let i = 0;
+  function tick() {
+    if (i > TOTAL_TICKS - 1) { concStopAuto(); return; }
+    concTick = i;
+    renderConcTick(i);
+    i++;
+    const delay = delays[i - 1] || 600;
+    concAutoTimer = setTimeout(tick, delay);
+  }
+  concAutoTimer = setTimeout(tick, 400);
+}
+
+function concStopAuto() {
+  if (concAutoTimer) clearTimeout(concAutoTimer);
+  concAutoTimer = null;
+  concRunning = false;
+  const els = getConcEls();
+  els.btnAuto.textContent = '▶ Start';
+  els.btnAuto.classList.add('primary');
+  if (concTick < TOTAL_TICKS - 1) els.btnStep.disabled = false;
+  els.btnBack.disabled = concTick <= 0;
+  els.btnReset.disabled = false;
+}
+
+// --- Tab switching ---
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('visible'));
+  if (tab === 'pipeline') {
+    document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    document.getElementById('tab-pipeline').classList.add('visible');
+  } else {
+    document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    document.getElementById('tab-concurrency').classList.add('visible');
+    concReset();
+  }
+}
+
+// Init concurrency tab
+concReset();
+</script>
+</body>
+</html>
