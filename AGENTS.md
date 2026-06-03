@@ -34,7 +34,8 @@ Repo: `github.com/Ramshreyas/EXD`
 |---|--------|-------|-------|
 | 01 | ✅ Complete | Intro to EXD | Project philosophy, learning approach, what EXD is and isn't |
 | 02 | ✅ Complete | Setup Overview | Machines (Yoneda + atom), directory layout, workflow, tooling |
-| 03 | ⬜ Planned | — | — |
+| 03 | ✅ Complete | Inference Benchmarking (Intro) | Prefill vs decode mental model, vLLM bench, llama-benchy setup |
+| 04 | ✅ Complete | Performance Tuning | Concurrency & batching, vLLM flag sweeps (GPU mem, scheduler, MTP depth), long-context prefill, prefix caching |
 
 ## Workflow
 

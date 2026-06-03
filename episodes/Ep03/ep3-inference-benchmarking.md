@@ -190,9 +190,6 @@ curl -s http://aitopatom-0a62.local:8000/v1/chat/completions \
     "messages": [{"role": "user", "content": "One sentence: what is prefill in LLM inference?"}],
     "max_tokens": 300, "temperature": 0
   }'
-# Qwen3.6 is a reasoning model — it thinks internally (the "reasoning" field)
-# before producing content. 50 tokens wasn't enough to finish the thought.
-# 300 gives it room to reason AND respond.
 ```
 
 ---
