@@ -240,7 +240,7 @@ llama-benchy \
   --depth 0 \
   --concurrency 1 2 4 \
   --runs 3 \
-  --save-result /tmp/qwen36-35b-${PROFILE}-short.json \
+  --save-result /tmp/${PROFILE}-short.json \
   --format json \
   --save-total-throughput-timeseries
 ```
@@ -305,7 +305,7 @@ llama-benchy \
   --depth 0 \
   --concurrency 1 2 4 \
   --runs 3 \
-  --save-result /tmp/qwen36-35b-${PROFILE}-short.json \
+  --save-result /tmp/${PROFILE}-short.json \
   --format json \
   --save-total-throughput-timeseries
 ```
@@ -333,230 +333,19 @@ Verdict: the throughput config is a minor win for batch-heavy
 scenarios, but the heavier cold start and worse single-user TTFT make
 it a niche pick — not a new default.
 
----
-
-## 6. Tuning knob 3: MTP speculative depth
-
-Recall from Ep 3: MTP (Multi-Token Prediction) lets the model guess
-multiple future tokens at once, then verify them in parallel. The
-baseline uses `num_speculative_tokens=2` — the model predicts 2 tokens
-ahead. What happens with 3?
-
-```bash
-# atom
-cd ~/EXD/projects/serve
-./scripts/down.sh
-./scripts/up.sh qwen3.6-35b-a3b-mtp3
-```
-
-```bash
-# atom
-cat configs/qwen3.6-35b-a3b-mtp3.env
-```
-
-```bash
---speculative-config '{"method":"qwen3_next_mtp","num_speculative_tokens":3}'
-```
-
-Rerun:
-
-```bash
-# yoneda
-export PROFILE=qwen3.6-35b-a3b-mtp3
-llama-benchy \
-  $COMMON_ARGS \
-  --pp 512 2048 \
-  --tg 256 \
-  --depth 0 \
-  --concurrency 1 2 4 \
-  --runs 3 \
-  --save-result /tmp/qwen36-35b-${PROFILE}-short.json \
-  --format json \
-  --save-total-throughput-timeseries
-```
-
-```bash
-# view results
-./scripts/bench-view /tmp/qwen36-35b-${PROFILE}-short.json
-```
-
-Results:
-
-| pp | c1 tg/s | c2 tg/s | c4 tg/s | c1 TTFT | c2 TTFT | c4 TTFT |
-|----|---------|---------|---------|---------|---------|---------|
-| 512 | 40.97 | 66.21 | 88.93 | 989 ms | 1211 ms | 1558 ms |
-| 2048 | 41.00 | 65.11 | 92.43 | 764 ms | 1187 ms | 1974 ms |
-
-What changed:
-- **c4 aggregate throughput is highest**: 88.93/92.43 tok/s — more
-  speculative tokens help when there are many concurrent decodes
-- **Single-user decode is WORSE**: 40.97 vs 44.04 tok/s — with only one
-  stream, the extra speculative head adds overhead without benefit
-- **TTFT is worse across the board**: more CUDA graphs to compile
-  for the MTP3 speculative path
-
-MTP3 is a **batch-only** win. For interactive use or single-user
-coding, stick with MTP2.
 
 ---
 
-## 7. Tuning knob 4: no speculative decoding at all
+## 6. Comparison
 
-What if we turn MTP off entirely? This tells us how much MTP is
-actually contributing:
-
-```bash
-# atom
-cd ~/EXD/projects/serve
-
-# One-off: copy the conservative config and remove MTP
-cp configs/qwen3.6-35b-a3b.env configs/qwen3.6-35b-a3b-no-mtp.env
-
-# Edit: remove the --speculative-config line from EXTRA_VLLM_ARGS
-# Then bring it up:
-./scripts/up.sh qwen3.6-35b-a3b-no-mtp
-```
-
-Results from this one-off experiment:
-
-| pp | c1 tg/s | c2 tg/s | c4 tg/s | c1 TTFT | c2 TTFT | c4 TTFT |
-|----|---------|---------|---------|---------|---------|---------|
-| 512 | 30.07 | 51.51 | 76.94 | 505 ms | 498 ms | 716 ms |
-| 2048 | 29.86 | 52.24 | 74.55 | 816 ms | 1245 ms | 1891 ms |
-
-This is the big one:
-- **Decode speed drops by ~32%**: 30 vs 44 tok/s at concurrency 1. MTP
-  is pulling real weight on this hardware.
-- **TTFT at low concurrency is slightly better**: no speculative CUDA
-  graph overhead, so cold start is faster. But the decode penalty
-  outweighs it for any real workload.
-- **c4 throughput holds up okay**: 76.94 vs 82.55 — at high
-  concurrency, the GPU is saturated by the sheer number of requests
-  even without MTP
-
-Decision: **keep MTP enabled**. The decode speedup is too large to
-give up.
-
----
-
-## 8. Long-context prefill
-
-So far we've tested with short prompts (512–2048 tokens). What happens
-when the prompt is 64k tokens — a full codebase, a long document?
-
-Prefill processes the entire prompt before the first token is
-generated. Longer prompts = more compute = longer TTFT. Let's measure
-how this scales:
-
-```bash
-# atom — back to the optimized default config
-cd ~/EXD/projects/serve
-./scripts/down.sh
-./scripts/up.sh qwen3.6-35b-a3b
-```
-
-```bash
-# yoneda — long context sweep, single user
-llama-benchy \
-  $COMMON_ARGS \
-  --pp 2048 \
-  --tg 64 \
-  --depth 0 4096 16384 32768 65536 98304 \
-  --concurrency 1 \
-  --runs 3 \
-  --no-cache \
-  --save-result /tmp/qwen36-35b-depth.json \
-  --format json
-```
-
-```bash
-# view results
-./scripts/bench-view /tmp/qwen36-35b-depth.json
-```
-
-What `--depth` does: adds that many extra tokens of context *before*
-the prompt. So `--pp 2048 --depth 32768` means a ~34k token prompt.
-`--no-cache` forces a fresh prefill every run (no KV cache reuse).
-
-Key things to watch:
-- **Prefill tokens/s** — should stay roughly constant regardless of
-  depth. If it drops, we're hitting a memory or scheduling bottleneck.
-- **TTFT** — should grow linearly with total prompt length.
-- **Decode speed** — should stay constant (the KV cache is larger but
-  decode is memory-bound, not compute-bound).
-
----
-
-## 9. Prefix caching
-
-Here's a scenario you'll hit constantly: you send a long document to
-the model, then ask follow-up questions. Each question re-uses the
-*same* document prefix.
-
-Without prefix caching, the model recomputes the entire document KV
-cache from scratch on every request:
-
-```
-Request 1: [─── 64k document ───][question 1]  →  full prefill (64k+ tokens)
-Request 2: [─── 64k document ───][question 2]  →  full prefill AGAIN (64k+)
-Request 3: [─── 64k document ───][question 3]  →  full prefill AGAIN (64k+)
-```
-
-With prefix caching (enabled via `--enable-prefix-caching`), the model
-stores the document's KV cache after request 1. Subsequent requests
-only compute the new part:
-
-```
-Request 1: [─── 64k document ───][question 1]  →  prefill 64k + new
-  → cache the [64k document] KV entries
-Request 2: [─── 64k document ───][question 2]  →  prefill only [question 2]!
-Request 3: [─── 64k document ───][question 3]  →  prefill only [question 3]!
-```
-
-Let's measure the impact:
-
-```bash
-# yoneda
-llama-benchy \
-  $COMMON_ARGS \
-  --pp 2048 \
-  --tg 128 \
-  --depth 4096 16384 32768 65536 \
-  --concurrency 1 2 \
-  --runs 3 \
-  --enable-prefix-caching \
-  --save-result /tmp/qwen36-35b-prefix.json \
-  --format json
-```
-
-```bash
-# view results
-./scripts/bench-view /tmp/qwen36-35b-prefix.json
-```
-
-What to compare:
-- With `--no-cache` (previous section): TTFT is proportional to total
-  prompt length every time
-- With `--enable-prefix-caching`: TTFT for subsequent requests at the
-  same depth should be dramatically lower — only paying prefill for
-  the ~2k prompt, not the full depth+pp
-
-This is one of the biggest real-world wins. If you're building a RAG
-app, a coding assistant, or a document Q&A system, prefix caching is
-the difference between 2-second and 15-second TTFT on a long document.
-
----
-
-## 10. Results comparison — picking a winner
-
-Compare any two runs side-by-side with colored deltas:
+Compare any two runs with colored deltas:
 
 ```bash
 # Compare tuned vs baseline — green = improvement, red = regression
 ./scripts/bench-view /tmp/qwen36-35b-baseline-short.json /tmp/qwen36-35b-a3b-conservative-short.json
 ```
 
-Here's the full short-context sweep across all profiles:
+Here's the full sweep across all tuned profiles:
 
 | Profile | pp | c1 tg/s | c2 tg/s | c4 tg/s | c1 TTFT | c2 TTFT | c4 TTFT | Notes |
 |---------|----|---------|---------|---------|---------|---------|---------|-------|
@@ -586,7 +375,7 @@ comparison.
 
 ---
 
-## 11. What we just did
+## 7. What we just did
 
 ```
 1. Built a mental model of continuous batching — how vLLM overlaps
@@ -600,11 +389,6 @@ comparison.
    significantly improved pp=2048 TTFT
 6. Pushed scheduler limits further for throughput: marginal c4 gains,
    worse cold start
-7. Tested MTP3 speculative depth: best batch throughput, worst
-   interactive experience
-8. Tested no MTP: 32% decode speed penalty — MTP stays on
-9. Measured long-context prefill scaling and prefix caching behaviour
-10. Compared all profiles and picked a winning config per workload
 ```
 
 We started with vLLM's implicit defaults, measured the baseline,
@@ -632,6 +416,3 @@ rm ~/EXD/projects/serve/configs/qwen3.6-35b-a3b-no-mtp.env
 ```
 
 ---
-
-
-
