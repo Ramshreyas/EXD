@@ -71,15 +71,6 @@ to batch multiple requests and keep the pipeline full.
 > watch 4 users queue, batch, and share the GPU. Then come back
 > for the real benchmarks.
 
-### Viewing results
-
-All sweeps below save JSON. Use `scripts/bench-view` to inspect:
-
-```bash
-# Single run — compact summary table (pp × concurrency → tg/s, TTFT)
-./scripts/bench-view /tmp/qwen36-35b-baseline-short.json
-```
-
 ---
 
 ## 2. Concurrency and batching — the mental model
@@ -178,6 +169,11 @@ llama-benchy \
   --save-total-throughput-timeseries
 ```
 
+```bash
+# view results
+./scripts/bench-view /tmp/qwen36-35b-baseline-short.json
+```
+
 Take note of these numbers — they're our reference point:
 
 | pp | c1 tg/s | c2 tg/s | c4 tg/s | c1 TTFT | c2 TTFT | c4 TTFT |
@@ -249,6 +245,11 @@ llama-benchy \
   --save-total-throughput-timeseries
 ```
 
+```bash
+# view results
+./scripts/bench-view /tmp/qwen36-35b-${PROFILE}-short.json
+```
+
 Results:
 
 | pp | c1 tg/s | c2 tg/s | c4 tg/s | c1 TTFT | c2 TTFT | c4 TTFT |
@@ -309,6 +310,11 @@ llama-benchy \
   --save-total-throughput-timeseries
 ```
 
+```bash
+# view results
+./scripts/bench-view /tmp/qwen36-35b-${PROFILE}-short.json
+```
+
 Results:
 
 | pp | c1 tg/s | c2 tg/s | c4 tg/s | c1 TTFT | c2 TTFT | c4 TTFT |
@@ -367,6 +373,11 @@ llama-benchy \
   --save-result /tmp/qwen36-35b-${PROFILE}-short.json \
   --format json \
   --save-total-throughput-timeseries
+```
+
+```bash
+# view results
+./scripts/bench-view /tmp/qwen36-35b-${PROFILE}-short.json
 ```
 
 Results:
@@ -458,6 +469,11 @@ llama-benchy \
   --format json
 ```
 
+```bash
+# view results
+./scripts/bench-view /tmp/qwen36-35b-depth.json
+```
+
 What `--depth` does: adds that many extra tokens of context *before*
 the prompt. So `--pp 2048 --depth 32768` means a ~34k token prompt.
 `--no-cache` forces a fresh prefill every run (no KV cache reuse).
@@ -511,6 +527,11 @@ llama-benchy \
   --enable-prefix-caching \
   --save-result /tmp/qwen36-35b-prefix.json \
   --format json
+```
+
+```bash
+# view results
+./scripts/bench-view /tmp/qwen36-35b-prefix.json
 ```
 
 What to compare:
