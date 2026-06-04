@@ -98,22 +98,20 @@ def fmt_ttft(v):
 def fmt_delta(new, old, unit="t/s"):
     """Format a Δ value.  For t/s higher is better; for TTFT lower is better."""
     if new is None or old is None:
-        return f"{DIM}   —{RESET}"
+        return f"{DIM}      —{RESET}"
     delta = new - old
     pct = (delta / old) * 100 if old != 0 else 0
 
     if unit == "t/s":
         better = delta > 0.5
+        sign = "+" if delta >= 0 else ""
+        color = GREEN if better else RED
+        return f"{color}{sign}{delta:.1f} ({sign}{pct:.0f}%){RESET}"
     else:
         better = delta < -1.0
-
-    sign = "+" if delta >= 0 else ""
-    color = GREEN if better else RED
-
-    if unit == "t/s":
-        return f"{color}{sign}{delta:+.1f} ({sign}{pct:+.0f}%){RESET}"
-    else:
-        return f"{color}{sign}{delta:+.0f}ms ({sign}{pct:+.0f}%){RESET}"
+        sign = "+" if delta >= 0 else ""
+        color = GREEN if better else RED
+        return f"{color}{sign}{delta:.0f}ms ({sign}{pct:.0f}%){RESET}"
 
 
 def print_single(sweep, label=""):
@@ -145,7 +143,7 @@ def print_single(sweep, label=""):
 
 
 def print_compare(sweep1, sweep2, label1="baseline", label2="tuned"):
-    """Print a compact side-by-side comparison — one row per pp×concurrency."""
+    """Print side-by-side comparison: tg/s table + TTFT table with Δ columns."""
     if not sweep1 or not sweep2:
         print(f"{RED}Missing results in one or both files.{RESET}")
         return
@@ -155,25 +153,31 @@ def print_compare(sweep1, sweep2, label1="baseline", label2="tuned"):
 
     print(f"\n{BOLD}Comparison: {label1} → {label2}{RESET}\n")
 
-    # Single combined table: prefill t/s + tg t/s + TTFT with deltas
-    print(f"{'pp':>7} {'c':>2}  {'baseline':>24}  {'tuned':>24}  {'Δ pf/s':>15}  {'Δ tg/s':>16}  {'Δ TTFT':>16}")
-    print(f"{'':>7} {'':>2}  {'pf/s':>7} {'tg/s':>7} {'TTFT':>8}  {'pf/s':>7} {'tg/s':>7} {'TTFT':>8}")
-    print("─" * 115)
-
+    # --- tg t/s (total) ---
+    print(f"{BOLD}Decode throughput — tg t/s (total){RESET}  {DIM}higher is better{RESET}")
+    print(f"{'pp':>6}  {'c':>2}  {'baseline':>7}  {'tuned':>7}  {'Δ':>18}")
+    print("─" * 50)
     for pp in pps:
         for c in cons:
             e1 = sweep1.get((pp, c), {})
             e2 = sweep2.get((pp, c), {})
-            pf1 = fmt_tps(e1.get("pp_tps"))
-            tps1 = fmt_tps(e1.get("tg_tps"))
-            ttf1 = fmt_ttft(e1.get("e2e_ttft"))
-            pf2 = fmt_tps(e2.get("pp_tps"))
-            tps2 = fmt_tps(e2.get("tg_tps"))
-            ttf2 = fmt_ttft(e2.get("e2e_ttft"))
-            d_pf  = fmt_delta(e2.get("pp_tps"), e1.get("pp_tps"), "t/s")
-            d_tps = fmt_delta(e2.get("tg_tps"), e1.get("tg_tps"), "t/s")
-            d_ttf = fmt_delta(e2.get("e2e_ttft"), e1.get("e2e_ttft"), "ms")
-            print(f"{pp:>7} {c:>2}  {pf1}  {tps1}  {ttf1}  {pf2}  {tps2}  {ttf2}  {d_pf}  {d_tps}  {d_ttf}")
+            v1 = e1.get("tg_tps")
+            v2 = e2.get("tg_tps")
+            d = fmt_delta(v2, v1, "t/s")
+            print(f"{pp:>6}  {c:>2}  {fmt_tps(v1)}  {fmt_tps(v2)}  {d}")
+
+    # --- TTFT ---
+    print(f"\n{BOLD}End-to-end TTFT{RESET}  {DIM}lower is better{RESET}")
+    print(f"{'pp':>6}  {'c':>2}  {'baseline':>8}  {'tuned':>8}  {'Δ':>18}")
+    print("─" * 52)
+    for pp in pps:
+        for c in cons:
+            e1 = sweep1.get((pp, c), {})
+            e2 = sweep2.get((pp, c), {})
+            v1 = e1.get("e2e_ttft")
+            v2 = e2.get("e2e_ttft")
+            d = fmt_delta(v2, v1, "ms")
+            print(f"{pp:>6}  {c:>2}  {fmt_ttft(v1)}  {fmt_ttft(v2)}  {d}")
     print()
 
 
