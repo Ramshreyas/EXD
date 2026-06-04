@@ -116,7 +116,7 @@ def fmt_delta(new, old, unit="t/s"):
 
 
 def print_single(sweep, label=""):
-    """Print a single-run summary table."""
+    """Print a single-run summary table — one row per pp×concurrency."""
     if not sweep:
         print(f"{RED}No results found.{RESET}")
         return
@@ -127,28 +127,23 @@ def print_single(sweep, label=""):
     if label:
         print(f"\n{BOLD}{label}{RESET}")
 
-    # Header
-    header = f"{'pp':>6}  {'c':>2}"
-    for c in cons:
-        header += f"  {'tg t/s':>7}  {'req t/s':>7}  {'TTFT':>8}"
+    # One row per (pp, c) combination
+    header = f"{'pp':>7} {'c':>2}  {'tg t/s':>7} {'req t/s':>7} {'TTFT':>8}"
     print(header)
     print("─" * len(header))
 
     for pp in pps:
-        line = f"{pp:>6}  "
-        for ci, c in enumerate(cons):
+        for c in cons:
             e = sweep.get((pp, c), {})
             tps = fmt_tps(e.get("tg_tps"))
             tps_r = fmt_tps(e.get("tg_tps_req"))
             ttft = fmt_ttft(e.get("e2e_ttft"))
-            sep = "  " if ci == 0 else "  "
-            line += f"{sep}{tps}    {tps_r}    {ttft}"
-        print(line)
+            print(f"{pp:>7} {c:>2}  {tps}   {tps_r}   {ttft}")
     print()
 
 
 def print_compare(sweep1, sweep2, label1="baseline", label2="tuned"):
-    """Print a side-by-side comparison with deltas."""
+    """Print a compact side-by-side comparison — one row per pp×concurrency."""
     if not sweep1 or not sweep2:
         print(f"{RED}Missing results in one or both files.{RESET}")
         return
@@ -158,30 +153,22 @@ def print_compare(sweep1, sweep2, label1="baseline", label2="tuned"):
 
     print(f"\n{BOLD}Comparison: {label1} → {label2}{RESET}\n")
 
-    # tg t/s (total) table
-    print(f"{BOLD}Decode throughput — tg t/s (total){RESET}  {DIM}higher is better{RESET}")
-    print(f"{'pp':>6}  {'c':>2}  {'baseline':>7}  {'tuned':>7}  {'Δ':>18}")
-    print("─" * 52)
-    for pp in pps:
-        for c in cons:
-            e1 = sweep1.get((pp, c), {})
-            e2 = sweep2.get((pp, c), {})
-            v1 = e1.get("tg_tps")
-            v2 = e2.get("tg_tps")
-            delta = fmt_delta(v2, v1, "t/s")
-            print(f"{pp:>6}  {c:>2}  {fmt_tps(v1)}  {fmt_tps(v2)}  {delta}")
+    # Single combined table: tg t/s + TTFT with deltas
+    print(f"{'pp':>7} {'c':>2}  {'baseline':>16}  {'tuned':>16}  {'Δ tg/s':>16}  {'Δ TTFT':>16}")
+    print(f"{'':>7} {'':>2}  {'tg/s':>7} {'TTFT':>8}  {'tg/s':>7} {'TTFT':>8}")
+    print("─" * 86)
 
-    print(f"\n{BOLD}End-to-end TTFT{RESET}  {DIM}lower is better{RESET}")
-    print(f"{'pp':>6}  {'c':>2}  {'baseline':>8}  {'tuned':>8}  {'Δ':>18}")
-    print("─" * 54)
     for pp in pps:
         for c in cons:
             e1 = sweep1.get((pp, c), {})
             e2 = sweep2.get((pp, c), {})
-            v1 = e1.get("e2e_ttft")
-            v2 = e2.get("e2e_ttft")
-            delta = fmt_delta(v2, v1, "ms")
-            print(f"{pp:>6}  {c:>2}  {fmt_ttft(v1)}  {fmt_ttft(v2)}  {delta}")
+            tps1 = fmt_tps(e1.get("tg_tps"))
+            ttf1 = fmt_ttft(e1.get("e2e_ttft"))
+            tps2 = fmt_tps(e2.get("tg_tps"))
+            ttf2 = fmt_ttft(e2.get("e2e_ttft"))
+            d_tps = fmt_delta(e2.get("tg_tps"), e1.get("tg_tps"), "t/s")
+            d_ttf = fmt_delta(e2.get("e2e_ttft"), e1.get("e2e_ttft"), "ms")
+            print(f"{pp:>7} {c:>2}  {tps1}  {ttf1}  {tps2}  {ttf2}  {d_tps}  {d_ttf}")
     print()
 
 
