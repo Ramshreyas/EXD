@@ -63,11 +63,12 @@ def extract_sweep(benchmarks, depth=0):
         if is_ctx_phase:
             continue
 
-        # Prefill runs carry e2e_ttft
+        # Prefill runs carry e2e_ttft and prefill throughput
         if pp is not None and run.get("pp_throughput") is not None:
             key = (pp, concurrency)
             entry = sweep.setdefault(key, {})
             entry["e2e_ttft"] = get_mean(run.get("e2e_ttft"))
+            entry["pp_tps"] = get_mean(run.get("pp_throughput"))
 
         # Decode runs carry tg throughput
         if tg is not None and run.get("tg_throughput") is not None:
@@ -128,17 +129,18 @@ def print_single(sweep, label=""):
         print(f"\n{BOLD}{label}{RESET}")
 
     # One row per (pp, c) combination
-    header = f"{'pp':>7} {'c':>2}  {'tg t/s':>7} {'req t/s':>7} {'TTFT':>8}"
+    header = f"{'pp':>7} {'c':>2}  {'pf t/s':>7} {'tg t/s':>7} {'req t/s':>7} {'TTFT':>8}"
     print(header)
     print("─" * len(header))
 
     for pp in pps:
         for c in cons:
             e = sweep.get((pp, c), {})
+            pf = fmt_tps(e.get("pp_tps"))
             tps = fmt_tps(e.get("tg_tps"))
             tps_r = fmt_tps(e.get("tg_tps_req"))
             ttft = fmt_ttft(e.get("e2e_ttft"))
-            print(f"{pp:>7} {c:>2}  {tps}   {tps_r}   {ttft}")
+            print(f"{pp:>7} {c:>2}  {pf}   {tps}   {tps_r}   {ttft}")
     print()
 
 
@@ -153,22 +155,25 @@ def print_compare(sweep1, sweep2, label1="baseline", label2="tuned"):
 
     print(f"\n{BOLD}Comparison: {label1} → {label2}{RESET}\n")
 
-    # Single combined table: tg t/s + TTFT with deltas
-    print(f"{'pp':>7} {'c':>2}  {'baseline':>16}  {'tuned':>16}  {'Δ tg/s':>16}  {'Δ TTFT':>16}")
-    print(f"{'':>7} {'':>2}  {'tg/s':>7} {'TTFT':>8}  {'tg/s':>7} {'TTFT':>8}")
-    print("─" * 86)
+    # Single combined table: prefill t/s + tg t/s + TTFT with deltas
+    print(f"{'pp':>7} {'c':>2}  {'baseline':>24}  {'tuned':>24}  {'Δ pf/s':>15}  {'Δ tg/s':>16}  {'Δ TTFT':>16}")
+    print(f"{'':>7} {'':>2}  {'pf/s':>7} {'tg/s':>7} {'TTFT':>8}  {'pf/s':>7} {'tg/s':>7} {'TTFT':>8}")
+    print("─" * 115)
 
     for pp in pps:
         for c in cons:
             e1 = sweep1.get((pp, c), {})
             e2 = sweep2.get((pp, c), {})
+            pf1 = fmt_tps(e1.get("pp_tps"))
             tps1 = fmt_tps(e1.get("tg_tps"))
             ttf1 = fmt_ttft(e1.get("e2e_ttft"))
+            pf2 = fmt_tps(e2.get("pp_tps"))
             tps2 = fmt_tps(e2.get("tg_tps"))
             ttf2 = fmt_ttft(e2.get("e2e_ttft"))
+            d_pf  = fmt_delta(e2.get("pp_tps"), e1.get("pp_tps"), "t/s")
             d_tps = fmt_delta(e2.get("tg_tps"), e1.get("tg_tps"), "t/s")
             d_ttf = fmt_delta(e2.get("e2e_ttft"), e1.get("e2e_ttft"), "ms")
-            print(f"{pp:>7} {c:>2}  {tps1}  {ttf1}  {tps2}  {ttf2}  {d_tps}  {d_ttf}")
+            print(f"{pp:>7} {c:>2}  {pf1}  {tps1}  {ttf1}  {pf2}  {tps2}  {ttf2}  {d_pf}  {d_tps}  {d_ttf}")
     print()
 
 
