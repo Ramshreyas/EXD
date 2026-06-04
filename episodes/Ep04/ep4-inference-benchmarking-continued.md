@@ -343,6 +343,9 @@ Compare any two runs with colored deltas:
 ```bash
 # Compare tuned vs baseline — green = improvement, red = regression
 ./scripts/bench-view /tmp/qwen36-35b-baseline-short.json /tmp/qwen36-35b-a3b-conservative-short.json
+
+# Compare throughput vs optimized
+./scripts/bench-view /tmp/qwen36-35b-a3b-conservative-short.json /tmp/qwen36-35b-a3b-throughput-short.json
 ```
 
 Here's the full sweep across all tuned profiles:
@@ -355,10 +358,6 @@ Here's the full sweep across all tuned profiles:
 | **optimized** | 2048 | 43.95 | 67.69 | 88.20 | 725 ms | 1228 ms | 1957 ms | Much better pp2048 TTFT than baseline |
 | throughput | 512 | 45.13 | 69.51 | 83.32 | 601 ms | 1143 ms | 1631 ms | Marginal gains, worse TTFT |
 | throughput | 2048 | 43.86 | 66.04 | 88.54 | 738 ms | 1228 ms | 1988 ms | Heavier cold start |
-| mtp3 | 512 | 40.97 | 66.21 | 88.93 | 989 ms | 1211 ms | 1558 ms | Best c4, worst single-stream |
-| mtp3 | 2048 | 41.00 | 65.11 | 92.43 | 764 ms | 1187 ms | 1974 ms | Batch-only profile |
-| no-mtp | 512 | 30.07 | 51.51 | 76.94 | 505 ms | 498 ms | 716 ms | ~32% slower decode |
-| no-mtp | 2048 | 29.86 | 52.24 | 74.55 | 816 ms | 1245 ms | 1891 ms | Confirms MTP matters |
 
 ### Recommendations by workload
 
@@ -366,8 +365,6 @@ Here's the full sweep across all tuned profiles:
 |----------|-------------|-----|
 | **Interactive coding / chat** | `qwen3.6-35b-a3b` (optimized) | Best balance: fast single-user decode, good TTFT, stable at all concurrencies |
 | **Batch / agent throughput** | `qwen3.6-35b-a3b-throughput` | Slightly higher aggregate c4 decode at the cost of TTFT |
-| **Pure batch at high concurrency** | `qwen3.6-35b-a3b-mtp3` | Highest c4 aggregate (92 tok/s at pp=2048) but poor interactive experience |
-| **Debugging / no spec decode** | no-mtp (one-off) | Use only to check if MTP is causing issues; 32% slower decode |
 
 The optimized default (`qwen3.6-35b-a3b`) is the winner for everyday use.
 It's now the canonical config — the baseline is preserved only for
@@ -406,13 +403,6 @@ work.
 # atom
 cd ~/EXD/projects/serve
 ./scripts/down.sh
-```
-
-Remove the one-off no-mtp config if you created it:
-
-```bash
-# atom
-rm ~/EXD/projects/serve/configs/qwen3.6-35b-a3b-no-mtp.env
 ```
 
 ---
