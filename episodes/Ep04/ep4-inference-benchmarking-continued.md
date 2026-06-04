@@ -71,6 +71,15 @@ to batch multiple requests and keep the pipeline full.
 > watch 4 users queue, batch, and share the GPU. Then come back
 > for the real benchmarks.
 
+### Viewing results
+
+All sweeps below save JSON. Use `scripts/bench-view` to inspect:
+
+```bash
+# Single run — compact summary table (pp × concurrency → tg/s, TTFT)
+./scripts/bench-view /tmp/qwen36-35b-baseline-short.json
+```
+
 ---
 
 ## 2. Concurrency and batching — the mental model
@@ -518,6 +527,13 @@ the difference between 2-second and 15-second TTFT on a long document.
 ---
 
 ## 10. Results comparison — picking a winner
+
+Compare any two runs side-by-side with colored deltas:
+
+```bash
+# Compare tuned vs baseline — green = improvement, red = regression
+./scripts/bench-view /tmp/qwen36-35b-baseline-short.json /tmp/qwen36-35b-a3b-conservative-short.json
+```
 
 Here's the full short-context sweep across all profiles:
 

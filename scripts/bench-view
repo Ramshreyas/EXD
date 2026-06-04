@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Quick CLI view and comparison for llama-benchy JSON results.
+
+Usage:
+  bench-view <result.json>              # single-run summary table
+  bench-view <baseline.json> <new.json> # side-by-side comparison with deltas
+
+Outputs a compact table of decode throughput (tg t/s) and TTFT
+for each prefill-length × concurrency combination.
+"""
+
+import json
+import sys
+
+GREEN  = "\033[32m"
+RED    = "\033[31m"
+BOLD   = "\033[1m"
+RESET  = "\033[0m"
+DIM    = "\033[2m"
+
+
+def get_mean(v):
+    if v is None:
+        return None
+    if isinstance(v, dict):
+        return v.get("mean")
+    return v
+
+
+def load_json(path):
+    with open(path) as f:
+        data = json.load(f)
+
+    # Normalize: top-level could be a dict with "benchmarks" key or a list
+    if isinstance(data, list):
+        benchmarks = data
+    elif isinstance(data, dict):
+        benchmarks = data.get("benchmarks", [])
+    else:
+        benchmarks = []
+
+    return benchmarks
+
+
+def extract_sweep(benchmarks, depth=0):
+    """Pull out the short-context sweep: pp × concurrency → (tg_tps, e2e_ttft).
+
+    Returns dict: (pp, concurrency) -> {tg_tps, tg_tps_req, e2e_ttft}
+    """
+    sweep = {}
+
+    for run in benchmarks:
+        ctx = run.get("context_size", 0)
+        if ctx != depth:
+            continue
+
+        pp = run.get("prompt_size")
+        tg = run.get("response_size")
+        concurrency = run.get("concurrency", 1)
+        is_ctx_phase = run.get("is_context_prefill_phase", False)
+
+        # Skip context-phase runs (from long-context sweeps)
+        if is_ctx_phase:
+            continue
+
+        # Prefill runs carry e2e_ttft
+        if pp is not None and run.get("pp_throughput") is not None:
+            key = (pp, concurrency)
+            entry = sweep.setdefault(key, {})
+            entry["e2e_ttft"] = get_mean(run.get("e2e_ttft"))
+
+        # Decode runs carry tg throughput
+        if tg is not None and run.get("tg_throughput") is not None:
+            # Find all pp entries at this concurrency to pair with
+            for (k_pp, k_c), entry in sweep.items():
+                if k_c == concurrency:
+                    entry["tg_tps"] = get_mean(run.get("tg_throughput"))
+                    entry["tg_tps_req"] = get_mean(run.get("tg_req_throughput"))
+
+    return sweep
+
+
+def fmt_tps(v):
+    if v is None:
+        return "   —"
+    return f"{v:5.1f}"
+
+
+def fmt_ttft(v):
+    if v is None:
+        return "    —"
+    if v < 1000:
+        return f" {v:4.0f}ms"
+    return f"{v/1000:4.1f}s"
+
+
+def fmt_delta(new, old, unit="t/s"):
+    """Format a Δ value.  For t/s higher is better; for TTFT lower is better."""
+    if new is None or old is None:
+        return f"{DIM}   —{RESET}"
+    delta = new - old
+    pct = (delta / old) * 100 if old != 0 else 0
+
+    if unit == "t/s":
+        better = delta > 0.5
+    else:
+        better = delta < -1.0
+
+    sign = "+" if delta >= 0 else ""
+    color = GREEN if better else RED
+
+    if unit == "t/s":
+        return f"{color}{sign}{delta:+.1f} ({sign}{pct:+.0f}%){RESET}"
+    else:
+        return f"{color}{sign}{delta:+.0f}ms ({sign}{pct:+.0f}%){RESET}"
+
+
+def print_single(sweep, label=""):
+    """Print a single-run summary table."""
+    if not sweep:
+        print(f"{RED}No results found.{RESET}")
+        return
+
+    pps = sorted(set(k[0] for k in sweep))
+    cons = sorted(set(k[1] for k in sweep))
+
+    if label:
+        print(f"\n{BOLD}{label}{RESET}")
+
+    # Header
+    header = f"{'pp':>6}  {'c':>2}"
+    for c in cons:
+        header += f"  {'tg t/s':>7}  {'req t/s':>7}  {'TTFT':>8}"
+    print(header)
+    print("─" * len(header))
+
+    for pp in pps:
+        line = f"{pp:>6}  "
+        for ci, c in enumerate(cons):
+            e = sweep.get((pp, c), {})
+            tps = fmt_tps(e.get("tg_tps"))
+            tps_r = fmt_tps(e.get("tg_tps_req"))
+            ttft = fmt_ttft(e.get("e2e_ttft"))
+            sep = "  " if ci == 0 else "  "
+            line += f"{sep}{tps}    {tps_r}    {ttft}"
+        print(line)
+    print()
+
+
+def print_compare(sweep1, sweep2, label1="baseline", label2="tuned"):
+    """Print a side-by-side comparison with deltas."""
+    if not sweep1 or not sweep2:
+        print(f"{RED}Missing results in one or both files.{RESET}")
+        return
+
+    pps = sorted(set(k[0] for k in sweep1) | set(k[0] for k in sweep2))
+    cons = sorted(set(k[1] for k in sweep1) | set(k[1] for k in sweep2))
+
+    print(f"\n{BOLD}Comparison: {label1} → {label2}{RESET}\n")
+
+    # tg t/s (total) table
+    print(f"{BOLD}Decode throughput — tg t/s (total){RESET}  {DIM}higher is better{RESET}")
+    print(f"{'pp':>6}  {'c':>2}  {'baseline':>7}  {'tuned':>7}  {'Δ':>18}")
+    print("─" * 52)
+    for pp in pps:
+        for c in cons:
+            e1 = sweep1.get((pp, c), {})
+            e2 = sweep2.get((pp, c), {})
+            v1 = e1.get("tg_tps")
+            v2 = e2.get("tg_tps")
+            delta = fmt_delta(v2, v1, "t/s")
+            print(f"{pp:>6}  {c:>2}  {fmt_tps(v1)}  {fmt_tps(v2)}  {delta}")
+
+    print(f"\n{BOLD}End-to-end TTFT{RESET}  {DIM}lower is better{RESET}")
+    print(f"{'pp':>6}  {'c':>2}  {'baseline':>8}  {'tuned':>8}  {'Δ':>18}")
+    print("─" * 54)
+    for pp in pps:
+        for c in cons:
+            e1 = sweep1.get((pp, c), {})
+            e2 = sweep2.get((pp, c), {})
+            v1 = e1.get("e2e_ttft")
+            v2 = e2.get("e2e_ttft")
+            delta = fmt_delta(v2, v1, "ms")
+            print(f"{pp:>6}  {c:>2}  {fmt_ttft(v1)}  {fmt_ttft(v2)}  {delta}")
+    print()
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(1)
+
+    files = sys.argv[1:]
+
+    if len(files) == 1:
+        benchmarks = load_json(files[0])
+        sweep = extract_sweep(benchmarks)
+        print_single(sweep, label=files[0])
+
+    elif len(files) == 2:
+        b1 = load_json(files[0])
+        b2 = load_json(files[1])
+        sweep1 = extract_sweep(b1)
+        sweep2 = extract_sweep(b2)
+        print_compare(
+            sweep1,
+            sweep2,
+            label1=files[0].rsplit("/", 1)[-1].replace(".json", ""),
+            label2=files[1].rsplit("/", 1)[-1].replace(".json", ""),
+        )
+    else:
+        print("Usage: bench-view <file.json> [<baseline.json> <new.json>]")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
