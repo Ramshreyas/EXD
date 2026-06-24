@@ -1,3 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter
+.ipynb_checkpoints/
+*_executed.ipynb
+
 # sync active symlink — runtime-only state, not source
 project/serve/configs/active
 
