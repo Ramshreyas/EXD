@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speculative Decoding — EXD Ep5</title>
+<style>
+:root {
+  --bg:#0d1117; --surface:#161b22; --border:#30363d;
+  --text:#c9d1d9; --dim:#8b949e; --accent:#58a6ff;
+  --hit:#3fb950; --miss:#f85149; --draft:#bc8cff;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--text);
+  font:14px ui-monospace,SFMono-Regular,monospace;
+  display:flex;justify-content:center;padding:2rem 1rem;
+}
+.w{max-width:720px;width:100%}
+h1{font-size:1.1rem;margin-bottom:.2rem}
+.sub{font-size:.75rem;color:var(--dim);margin-bottom:1rem}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem}
+.cg{display:flex;flex-direction:column;gap:.2rem}
+.cg label{font-size:.65rem;color:var(--dim);text-transform:uppercase}
+.cg select{padding:.3rem .5rem;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:monospace;font-size:.8rem;cursor:pointer}
+.btn-row{display:flex;gap:.5rem;align-items:center}
+.btn{background:var(--surface);color:var(--accent);border:1px solid var(--accent);padding:.35rem .8rem;border-radius:5px;cursor:pointer;font-family:monospace;font-size:.75rem;font-weight:600}
+.btn:hover{background:rgba(88,166,255,.12)}
+.btn.pri{background:var(--accent);color:var(--bg)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.step{font-size:.7rem;color:var(--dim);margin-left:.5rem}
+.sec{font-size:.65rem;color:var(--dim);text-transform:uppercase;margin-bottom:.3rem}
+.pipe{display:flex;gap:6px;padding:.7rem;margin-bottom:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;min-height:44px;flex-wrap:wrap;align-items:center}
+.ps{padding:.4rem .6rem;border-radius:6px;border:2px solid var(--border);font-size:.7rem;text-align:center;transition:all .3s}
+.ps.on{border-color:var(--accent);box-shadow:0 0 8px rgba(88,166,255,.25)}
+.ps .l{font-size:.55rem;color:var(--dim);display:block}
+.ps .v{font-size:.75rem;display:block;margin-top:1px}
+.tokens{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:1rem;min-height:50px;align-items:center}
+.tok{padding:5px 10px;border-radius:6px;font-size:.75rem;font-weight:600;border:2px solid transparent;text-align:center;transition:all .3s}
+.tok .t{display:block;min-width:40px}
+.tok .lb{font-size:.5rem;color:var(--dim);margin-top:2px}
+.t-OK{background:var(--surface);border-color:var(--border);color:var(--text)}
+.t-HIT{background:rgba(63,185,80,.12);border-color:var(--hit);color:var(--hit)}
+.t-MISS{background:rgba(248,81,73,.12);border-color:var(--miss);color:var(--miss);text-decoration:line-through}
+.t-DRAFT{background:rgba(188,140,255,.1);border-color:var(--draft);color:var(--draft)}
+.info{font-size:.7rem;color:var(--dim);padding:.6rem .8rem;border-left:3px solid var(--accent);background:rgba(88,166,255,.04);border-radius:0 6px 6px 0;line-height:1.5;min-height:2.5em}
+.info code{color:var(--accent);background:rgba(88,166,255,.1);padding:0 4px;border-radius:3px}
+.stats{display:flex;gap:1rem;margin-bottom:1rem;padding:.6rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;flex-wrap:wrap}
+.stat{text-align:center;min-width:70px}
+.stat .n{font-size:1.1rem;font-weight:700;color:var(--accent);font-family:monospace}
+.stat .lb{font-size:.55rem;color:var(--dim)}
+.stat.bad .n{color:var(--miss)}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>Speculative Decoding — Step by Step</h1>
+<div class="sub">Draft model proposes tokens ahead, full model verifies · EXD Ep5</div>
+
+<div class="controls">
+  <div class="cg">
+    <label>Spec Depth <span id="dv">2</span></label>
+    <select id="depth">
+      <option value="2" selected>2 tokens</option>
+      <option value="3">3 tokens</option>
+    </select>
+  </div>
+  <div class="btn-row">
+    <button class="btn" id="prev">&#x2190; Prev</button>
+    <button class="btn pri" id="step">Next Step</button>
+    <button class="btn" id="reset">Reset</button>
+    <span class="step" id="st">Step 0</span>
+  </div>
+</div>
+
+<div class="sec">Pipeline</div>
+<div class="pipe" id="pipe"></div>
+
+<div class="sec">Tokens</div>
+<div class="tokens" id="trow"></div>
+
+<div class="stats" id="stats"></div>
+
+<div class="info" id="info">
+  <strong>Speculative decoding</strong>: a lightweight draft model guesses tokens ahead.<br>
+  The full model verifies them all in <em>one forward pass</em>.<br>
+  <span style="color:var(--hit)">&#9632; Green</span> = correct guess (free speed) &middot;
+  <span style="color:var(--miss)">&#9632; Red</span> = wrong guess (wasted, struck out)<br>
+  <code>Space</code> = next, <code>&#x2190;</code> = previous. Switch depth to compare.
+</div>
+</div>
+
+<script>
+var PREFIX = "The quick brown";
+var d = function(id) { return document.getElementById(id); };
+var idx = 0;
+var depth = 2;
+
+// ---- STATIC SCRIPTS ----
+// Each script step: {phase, info, drafts: [{token,correct}] or null, confirm: [tokens_to_add_to_conf]}
+// phase: "draft" | "verify" | "done"
+// confirm only on verify steps: tokens to add to conf (hits + any miss correction, in order)
+
+var SCRIPT_2 = [
+  {phase:"draft", info:"<strong>Draft model</strong> guesses 2 tokens ahead: <em>fox</em>, <em>jumps</em>",
+   drafts:[{token:"fox",correct:true},{token:"jumps",correct:true}]},
+  {phase:"verify", info:"<strong>Full model</strong> verifies: 2 hit(s). Speed gained!",
+   drafts:[{token:"fox",correct:true},{token:"jumps",correct:true}], confirm:["fox","jumps"]},
+  {phase:"draft", info:"<strong>Draft model</strong> guesses 2 tokens ahead: <em>over</em>, <em>the</em> — but one is wrong!",
+   drafts:[{token:"over",correct:true},{token:"???",correct:false}]},
+  {phase:"verify", info:"<strong>Full model</strong> verifies: 1 hit(s), 1 miss. Corrects <em>??? &rarr; the</em>.",
+   drafts:[{token:"over",correct:true},{token:"???",correct:false,correction:"the"}], confirm:["over","the"]},
+  {phase:"draft", info:"<strong>Draft model</strong> guesses 2 tokens ahead: <em>lazy</em>, <em>dog</em>",
+   drafts:[{token:"lazy",correct:true},{token:"dog",correct:true}]},
+  {phase:"verify", info:"<strong>Full model</strong> verifies: 2 hit(s). Done! &#x1f389;",
+   drafts:[{token:"lazy",correct:true},{token:"dog",correct:true}], confirm:["lazy","dog"]},
+  {phase:"done", info:"<strong>Done!</strong> Generated 9 tokens in 3 forward passes (6 steps). Speculation saved ~50% of the passes.", drafts:[]},
+];
+
+var SCRIPT_3 = [
+  {phase:"draft", info:"<strong>Draft model</strong> guesses 3 tokens ahead: <em>fox</em>, <em>jumps</em>, <em>over</em>",
+   drafts:[{token:"fox",correct:true},{token:"jumps",correct:true},{token:"over",correct:true}]},
+  {phase:"verify", info:"<strong>Full model</strong> verifies: 3 hit(s) in one pass! &#x1f680;",
+   drafts:[{token:"fox",correct:true},{token:"jumps",correct:true},{token:"over",correct:true}], confirm:["fox","jumps","over"]},
+  {phase:"draft", info:"<strong>Draft model</strong> guesses 3 tokens ahead: <em>the</em>, <em>lazy</em>, <em>dog</em> — but one is wrong!",
+   drafts:[{token:"the",correct:true},{token:"???",correct:false},{token:"dog",correct:true}]},
+  {phase:"verify", info:"<strong>Full model</strong> verifies: 1 hit(s), 1 miss. Corrects <em>??? &rarr; lazy</em>. Remaining drafts accepted. Done!",
+   drafts:[{token:"the",correct:true},{token:"???",correct:false,correction:"lazy"},{token:"dog",correct:true}], confirm:["the","lazy","dog"]},
+  {phase:"done", info:"<strong>Done!</strong> Generated 9 tokens in 2 forward passes (4 steps). Depth 3 got 3 tokens in one go, but a miss wasted extra work.", drafts:[]},
+];
+
+var script = SCRIPT_2.slice();
+var conf = [];
+var total_hits = 0, total_misses = 0;
+
+function getScript() {
+  return Number(d("depth").value) === 3 ? SCRIPT_3 : SCRIPT_2;
+}
+
+function reset() {
+  var s = getScript();
+  script = s.map(function(x) { return JSON.parse(JSON.stringify(x)); });
+  conf = PREFIX.split(" ");
+  total_hits = 0;
+  total_misses = 0;
+  idx = -1;
+  depth = Number(d("depth").value);
+  d("dv").textContent = depth;
+  render();
+  d("st").textContent = "Step " + idx;
+  d("info").innerHTML = "Prefix: <strong>" + PREFIX + "</strong> &#x2192; target: <strong>fox jumps over the lazy dog</strong>. Depth = " + depth + ". Click <code>Next Step</code>.";
+  updateButtons();
+}
+
+function nextStep() {
+  if (idx >= 0 && idx >= script.length) return;
+  if (idx === -1) {
+    // Initial state: just advance to first frame
+    idx = 0;
+    d("st").textContent = "Step " + idx;
+    d("info").innerHTML = script[0].info;
+    updateButtons();
+    render();
+    return;
+  }
+  var frame = script[idx];
+  depth = Number(d("depth").value);
+  d("dv").textContent = depth;
+
+  if (frame.phase === "verify" && frame.confirm) {
+    for (var i = 0; i < frame.confirm.length; i++) {
+      conf.push(frame.confirm[i]);
+    }
+    // Count hits/misses from drafts
+    if (frame.drafts) {
+      for (var i = 0; i < frame.drafts.length; i++) {
+        if (frame.drafts[i].correct) total_hits++;
+        else total_misses++;
+      }
+    }
+  }
+  idx++;
+  d("st").textContent = "Step " + idx;
+  d("info").innerHTML = frame.info;
+  updateButtons();
+  render();
+}
+
+function prevStep() {
+  if (idx <= -1) return;
+  var target = idx - 1;
+  // Replay from start up to target
+  conf = PREFIX.split(" ");
+  total_hits = 0;
+  total_misses = 0;
+  depth = Number(d("depth").value);
+  script = getScript().map(function(x) { return JSON.parse(JSON.stringify(x)); });
+  for (var i = 0; i < target; i++) {
+    var frame = script[i];
+    if (frame.phase === "verify" && frame.confirm) {
+      for (var j = 0; j < frame.confirm.length; j++) conf.push(frame.confirm[j]);
+      if (frame.drafts) {
+        for (var j = 0; j < frame.drafts.length; j++) {
+          if (frame.drafts[j].correct) total_hits++;
+          else total_misses++;
+        }
+      }
+    }
+  }
+  idx = target;
+  d("st").textContent = idx === -1 ? "Step 0" : "Step " + idx;
+  if (idx === -1) {
+    d("info").innerHTML = "Prefix: <strong>" + PREFIX + "</strong> &#x2192; target: <strong>fox jumps over the lazy dog</strong>. Depth = " + depth + ".";
+  } else {
+    d("info").innerHTML = script[idx] ? script[idx].info : "";
+  }
+  updateButtons();
+  render();
+}
+
+function updateButtons() {
+  var pastEnd = idx >= 0 && idx >= script.length;
+  var atDone = idx >= 0 && idx < script.length && script[idx].phase === "done";
+  d("step").disabled = pastEnd || atDone;
+  d("prev").disabled = idx <= -1;
+  if (pastEnd) d("st").textContent = "Done";
+}
+
+function render() {
+  var cur = (idx >= 0 && idx < script.length) ? script[idx] : null;
+  var pipe = d("pipe");
+  var ph = idx === -1 ? "" : (cur ? cur.phase : "done");
+  var dm = ph === "draft" ? ' on' : '';
+  var fm = ph === "verify" ? ' on' : '';
+  var dn = (ph === "done" || idx >= script.length) ? ' on' : '';
+  pipe.innerHTML = '<div class="ps' + dm + '"><span class="l">Draft Model</span><span class="v">guesses ' + depth + ' tokens</span></div>' +
+    '<span style="color:var(--dim);margin:0 4px">&#8594;</span>' +
+    '<div class="ps' + fm + '"><span class="l">Full Model</span><span class="v">verifies in 1 pass</span></div>' +
+    '<span style="color:var(--dim);margin:0 4px">&#8594;</span>' +
+    '<div class="ps' + dn + '"><span class="l">' + ((ph === "done" || idx >= script.length) ? 'Done' : 'Repeat') + '</span><span class="v">' + ((ph === "done" || idx >= script.length) ? 'complete' : 'until EOS') + '</span></div>';
+
+  var html = "";
+  for (var i = 0; i < conf.length; i++) {
+    var isPrefix = i < PREFIX.split(" ").length;
+    html += '<div class="tok t-OK"><span class="t">' + conf[i] + '</span><span class="lb">' + (isPrefix ? 'prefix' : 'generated') + '</span></div>';
+  }
+  if (cur && cur.drafts && cur.drafts.length > 0) {
+    var isVerify = cur.phase === "verify";
+    if (isVerify) {
+      html += '<div style="position:relative;display:flex;gap:4px;align-items:center;padding:6px 6px 4px;border:2px dashed var(--accent);border-radius:8px;background:rgba(88,166,255,.04);margin-top:2px">';
+      html += '<span style="position:absolute;top:-8px;left:6px;font-size:.5rem;color:var(--accent);background:var(--surface);padding:0 4px">verified in 1 pass</span>';
+    }
+    for (var i = 0; i < cur.drafts.length; i++) {
+      var cls, label;
+      if (cur.phase === "draft") {
+        cls = "t-DRAFT";
+        label = "drafting...";
+      } else {
+        cls = cur.drafts[i].correct ? "t-HIT" : "t-MISS";
+        label = cur.drafts[i].correct ? "hit" : "miss";
+      }
+      if (!cur.drafts[i].correct && cur.drafts[i].correction) {
+        // Split card: left = struck-out miss, right = green correction
+        html += '<div class="tok ' + cls + '" style="display:flex;gap:8px;align-items:center;text-decoration:none">' +
+          '<div style="text-align:center"><span class="t" style="text-decoration:line-through">' + cur.drafts[i].token + '</span><span class="lb">' + label + '</span></div>' +
+          '<span style="color:var(--dim);font-size:.65rem">&rarr;</span>' +
+          '<div class="tok t-HIT" style="margin:0;text-decoration:none"><span class="t">' + cur.drafts[i].correction + '</span><span class="lb">corrected</span></div>' +
+          '</div>';
+      } else {
+        html += '<div class="tok ' + cls + '"><span class="t">' + cur.drafts[i].token + '</span><span class="lb">' + label + '</span></div>';
+      }
+    } // end draft tokens loop
+    if (isVerify) { html += '</div>'; }
+  }
+  d("trow").innerHTML = html || '<span style="color:var(--dim);font-size:.75rem">no tokens</span>';
+
+  var passes = idx > 0 ? Math.ceil(idx / 2) : 0;
+  d("stats").innerHTML =
+    '<div class="stat"><div class="n">' + conf.length + '</div><div class="lb">tokens out</div></div>' +
+    '<div class="stat"><div class="n">' + passes + '</div><div class="lb">forward passes</div></div>' +
+    '<div class="stat"><div class="n">' + total_hits + '</div><div class="lb">hits</div></div>' +
+    '<div class="stat' + (total_misses > 0 ? ' bad' : '') + '"><div class="n">' + total_misses + '</div><div class="lb">misses</div></div>';
+}
+
+d("step").onclick = nextStep;
+d("prev").onclick = prevStep;
+d("reset").onclick = reset;
+d("depth").onchange = reset;
+document.onkeydown = function(e) {
+  if (e.key === " " || e.key === "Enter") { e.preventDefault(); nextStep(); }
+  if (e.key === "ArrowLeft") { e.preventDefault(); prevStep(); }
+};
+reset();
+</script>
+</body>
+</html>
