@@ -1,15 +1,45 @@
+# Secrets
+.env
+*.env.local
+*.env.*.local
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+.python-version
 
 # Jupyter
 .ipynb_checkpoints/
 *_executed.ipynb
 
-# sync active symlink — runtime-only state, not source
-project/serve/configs/active
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
 
-# runtime logs
-project/serve/logs/*.log
+# IDE
+.vscode/settings.json
+.idea/
+*.code-workspace
+
+# Node / npm (if any)
+node_modules/
+package-lock.json
+
+# Hugging Face
+cache/
+stored_tokens
+
+# Runtime state
+projects/serve/configs/active
+projects/serve/logs/*.log
