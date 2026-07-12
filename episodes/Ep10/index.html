@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MRoPE — Multi-Resolution Rotary Position Embedding</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --text: #c9d1d9;
+    --border: #30363d;
+    --code-bg: #161b22;
+    --link: #58a6ff;
+    --heading: #f0f6fc;
+    --accent: #79c0ff;
+    --inline-code: #d2a8ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  h1, h2, h3, h4 { color: var(--heading); margin-top: 2rem; margin-bottom: 0.75rem; font-weight: 600; }
+  h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  h3 { font-size: 1.2rem; }
+  p { margin-bottom: 1rem; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.5rem 1rem;
+    margin: 1rem 0;
+    color: #8b949e;
+    background: rgba(121, 192, 255, 0.05);
+  }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; color: var(--inline-code); }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 1rem 0; border: 1px solid var(--border); }
+  pre code { background: none; padding: 0; color: var(--text); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  ul, ol { margin: 0 0 1rem 1.5rem; }
+  li { margin-bottom: 0.25rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+  th { background: var(--code-bg); font-weight: 600; }
+  img { max-width: 100%; }
+  .download-btn {
+    display: inline-block;
+    background: #238636;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    font-weight: 600;
+  }
+  .download-btn:hover { background: #2ea043; text-decoration: none; }
+  .katex { font-size: 1.1em; }
+  kbd {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.85em;
+  }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+</head>
+<body>
+<div class="container">
+  <a class="download-btn" href="mrope_exploration.ipynb" download>📓 Download Notebook</a>
+  <div id="content"></div>
+</div>
+<script type="module">
+import { marked } from 'https://cdn.jsdelivr.net/npm/marked@13.0.3/+esm';
+const resp = await fetch('README.md');
+const md = await resp.text();
+const body = md.replace(/^---[\s\S]*?---\n*/, '');
+document.getElementById('content').innerHTML = marked.parse(body);
+// Load KaTeX async
+const katexCSS = document.querySelector('link[href*="katex"]');
+if (katexCSS) {
+  import('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js').then(() => {
+    import('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js').then(() => {
+      renderMathInElement(document.getElementById('content'), {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false},
+        ],
+        throwOnError: false,
+      });
+    });
+  });
+}
+</script>
+</body>
+</html>
