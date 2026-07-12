@@ -168,7 +168,7 @@ def nearest_neighbors(token_str, k=8):
 
 ## Interactive Notebook
 
-The full interactive notebook with all visualizations, BPE from scratch, nearest neighbor searches, and t-SNE plots is available [here](https://huggingface.co/datasets/EXD-AI/episode-07-tokenization).
+The full interactive notebook with all visualizations, BPE from scratch, nearest neighbor searches, and t-SNE plots is available [here](https://huggingface.co/datasets/EXDai/episode-07-tokenization).
 
 ---
 

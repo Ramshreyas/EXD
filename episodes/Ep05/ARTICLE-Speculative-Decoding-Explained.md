@@ -77,7 +77,7 @@ Key finding: MTP2 gives the best balance. MTP3 adds marginal throughput gains wi
 
 ## Interactive Simulator
 
-Open the [Speculative Decoding Simulator](https://huggingface.co/spaces/EXD-AI/speculative-decoding-simulator) to see the tradeoff visually:
+Open the [Speculative Decoding Simulator](https://huggingface.co/spaces/EXDai/speculative-decoding-simulator) to see the tradeoff visually:
 - Adjust spec depth from 0 to 5
 - Watch green (accepted) vs red (rejected) tokens
 - See throughput vs latency in real time

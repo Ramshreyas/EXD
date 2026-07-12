@@ -12,16 +12,20 @@ The objective is to establish the infrastructure for a centralized hub hosting a
 
 | Asset | Type | Location |
 |-------|------|----------|
-| **Org Profile** | Space (org card) | `EXD-AI/README` |
-| **Ep3 Simulator** | Static Space | `EXD-AI/inference-simulator` |
-| **Ep4 Simulator** | Static Space | `EXD-AI/inference-simulator-v2` |
-| **Ep5 Simulator** | Static Space | `EXD-AI/speculative-decoding-simulator` |
+| **Org Profile** | Space (org card) | `EXDai/README` |
+| **Ep3 Simulator** | Static Space | `EXDai/inference-simulator` |
+| **Ep4 Simulator** | Static Space | `EXDai/inference-simulator-v2` |
+| **Ep5 Simulator** | Static Space | `EXDai/speculative-decoding-simulator` |
 
 ### Article Strategy
 
-HF Articles require a Team plan. All episode write-ups are linked directly from the org card to their GitHub source:
+HF Articles on **organizations** (like `EXD-AI`) require a Team plan. **Individual accounts** (like `EXDai`) support articles without a paid plan — EXDai is an individual account, so articles work natively.
 
-- `github.com/Ramshreyas/EXD/blob/main/episodes/Ep{N}/`
+The strategy: publish episode articles directly on `EXDai` as HF Blog posts (accessible at `huggingface.co/EXDai`). These serve as the narrated walkthrough, with links to the interactive Spaces for hands-on exploration.
+
+Episodes with articles:
+
+- `huggingface.co/EXDai` — Ep09: Qwen3.6-35B-A3B Architecture Overview
 
 ---
 
@@ -34,22 +38,22 @@ HF Articles require a Team plan. All episode write-ups are linked directly from 
 - [x] Git credential helper set to `store`
 
 ### Step 1.2: Namespace Scaffolding ✅
-- [x] Org `EXD-AI` created at `huggingface.co/EXD-AI`
-- [x] Org card Space created at `EXD-AI/README` — links to GitHub, YouTube, episodes
+- [x] Org `EXDai` created at `huggingface.co/EXDai`
+- [x] Org card Space created at `EXDai/README` — links to GitHub, YouTube, episodes
 
 ---
 
 ## Phase 2: Core Hub Infrastructure Setup
 
 ### Step 2.1: The Interactive Hub (Spaces) ✅
-- [x] `EXD-AI/inference-simulator` — Ep3 pipeline visualization
-- [x] `EXD-AI/inference-simulator-v2` — Ep4 extended version
-- [x] `EXD-AI/speculative-decoding-simulator` — Ep5 spec decode explorer
-- [ ] `EXD-AI/tokenizer-visualizer` — Ep7 notebook conversion (Gradio/Streamlit)
+- [x] `EXDai/inference-simulator` — Ep3 pipeline visualization
+- [x] `EXDai/inference-simulator-v2` — Ep4 extended version
+- [x] `EXDai/speculative-decoding-simulator` — Ep5 spec decode explorer
+- [ ] `EXDai/tokenizer-visualizer` — Ep7 notebook conversion (Gradio/Streamlit)
 
 ### Step 2.2: The Artifact Hub (Models & Datasets)
-- [ ] Create `EXD-AI/benchmark-results` dataset — performance data and metric sweeps
-- [ ] Create `EXD-AI/vllm-configs` dataset — vLLM configuration profiles
+- [ ] Create `EXDai/benchmark-results` dataset — performance data and metric sweeps
+- [ ] Create `EXDai/vllm-configs` dataset — vLLM configuration profiles
 
 ---
 

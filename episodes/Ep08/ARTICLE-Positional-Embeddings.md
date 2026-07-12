@@ -117,7 +117,7 @@ Disadvantages:
 
 ## Interactive Notebook
 
-The full notebook with visualizations of RoPE rotations, frequency band analysis, and comparisons between different positional encoding schemes is available [here](https://huggingface.co/datasets/EXD-AI/episode-08-positional-embeddings).
+The full notebook with visualizations of RoPE rotations, frequency band analysis, and comparisons between different positional encoding schemes is available [here](https://huggingface.co/datasets/EXDai/episode-08-positional-embeddings).
 
 ---
 

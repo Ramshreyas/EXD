@@ -113,7 +113,7 @@ The optimized default wins for everyday use:
 
 ## Interactive Simulator
 
-Open the [Inference Simulator v2](https://huggingface.co/spaces/EXD-AI/inference-simulator-v2) to visualize concurrency, batching, and memory constraints step by step.
+Open the [Inference Simulator v2](https://huggingface.co/spaces/EXDai/inference-simulator-v2) to visualize concurrency, batching, and memory constraints step by step.
 
 ---
 

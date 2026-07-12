@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HF Push Utility — Quick uploads from the local workbench to the EXD-AI org.
+HF Push Utility — Quick uploads from the local workbench to the EXDai org.
 
 Usage:
     python3 scripts/hf_push_util.py <repo_id> <local_path> [--to <hub_path>]
@@ -8,13 +8,13 @@ Usage:
 
 Examples:
     # Upload a single file
-    python3 scripts/hf_push_util.py EXD-AI/benchmark-results ./bench.txt --to runs/bench.txt
+    python3 scripts/hf_push_util.py EXDai/benchmark-results ./bench.txt --to runs/bench.txt
 
     # Create a new Space
-    python3 scripts/hf_push_util.py --create EXD-AI/my-space --type space --sdk static
+    python3 scripts/hf_push_util.py --create EXDai/my-space --type space --sdk static
 
     # Upload an entire directory
-    python3 scripts/hf_push_util.py EXD-AI/my-dataset ./data/ --recursive
+    python3 scripts/hf_push_util.py EXDai/my-dataset ./data/ --recursive
 """
 
 import argparse
@@ -113,7 +113,7 @@ def cmd_upload(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="HF Push Utility — upload assets to the EXD-AI org.",
+        description="HF Push Utility — upload assets to the EXDai org.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -121,7 +121,7 @@ def main():
 
     # Upload subcommand
     up = sub.add_parser("upload", help="Upload file(s) to a repo")
-    up.add_argument("repo_id", help="Hub repo ID (e.g. EXD-AI/my-repo)")
+    up.add_argument("repo_id", help="Hub repo ID (e.g. EXDai/my-repo)")
     up.add_argument("local_path", help="Local file or directory path")
     up.add_argument("--to", help="Path in repo (default: basename of local_path)")
     up.add_argument("--type", choices=["model", "dataset", "space"], help="Repo type (auto-detected from repo_id if omitted)")
@@ -130,7 +130,7 @@ def main():
 
     # Create subcommand
     cr = sub.add_parser("create", help="Create a new repo")
-    cr.add_argument("repo_id", help="Hub repo ID (e.g. EXD-AI/my-repo)")
+    cr.add_argument("repo_id", help="Hub repo ID (e.g. EXDai/my-repo)")
     cr.add_argument("--type", choices=["model", "dataset", "space"], default="model", help="Repo type")
     cr.add_argument("--sdk", help="Space SDK (required for spaces: static, gradio, streamlit)")
     cr.add_argument("--private", action="store_true", help="Create private repo")

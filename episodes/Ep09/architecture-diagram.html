@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qwen3.6-35B-A3B Architecture — EXD Ep9</title>
+<style>
+:root {
+  --bg:#0d1117; --surface:#161b22; --border:#30363d;
+  --text:#c9d1d9; --dim:#8b949e; --accent:#58a6ff;
+  --green:#3fb950; --purple:#bc8cff; --orange:#d29922;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--text);
+  font:14px -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  display:flex;justify-content:center;padding:1.5rem 1rem;
+}
+.w{max-width:1200px;width:100%}
+
+/* Header */
+h1{font-size:1rem;font-weight:700;margin-bottom:.15rem}
+.sub{font-size:.7rem;color:var(--dim)}
+
+/* Tabs */
+.tabs{display:flex;gap:0;margin:1rem 0 0 0;border-bottom:2px solid var(--border)}
+.tab{
+  padding:.4rem .9rem;font-size:.73rem;font-weight:600;cursor:pointer;
+  color:var(--dim);border-bottom:2px solid transparent;
+  margin-bottom:-2px;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none
+}
+.tab:hover{color:var(--text)}
+.tab.act{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Main split */
+.split{display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-top:.75rem}
+@media(max-width:800px){.split{grid-template-columns:1fr}}
+.diag-area{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;min-height:320px}
+.diag-area svg{width:100%;height:auto;display:block}
+.diag-area.none{display:none}
+
+/* Annotation panel */
+.ann{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.9rem;overflow-y:auto}
+.ann h2{font-size:.85rem;margin-bottom:.4rem}
+.ann h3{font-size:.73rem;color:var(--accent);margin:.6rem 0 .2rem 0;padding-top:.5rem;border-top:1px solid var(--border)}
+.ann p{font-size:.72rem;color:var(--dim);line-height:1.55;margin-bottom:.4rem}
+.ann p strong{color:var(--text)}
+.ann code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:.68rem;background:rgba(88,166,255,.08);padding:1px 4px;border-radius:3px;color:var(--accent)}
+.ann table{font-size:.68rem;border-collapse:collapse;width:100%;margin:.3rem 0}
+.ann td{padding:2px 6px 2px 0;vertical-align:top}
+.ann td.k{color:var(--dim);font-family:monospace;white-space:nowrap}
+.ann td.v{font-family:monospace}
+.ann td.v.hl{color:var(--accent);font-weight:600}
+
+/* SVG text */
+.lbl{font-size:12px;fill:var(--text);font-family:monospace;pointer-events:none}
+.sublbl{font-size:9px;fill:var(--dim);font-family:monospace;pointer-events:none}
+.meta{font-size:8px;fill:var(--dim);font-family:monospace;pointer-events:none}
+.accent{fill:var(--accent)}
+.green{fill:var(--green)}
+.purple{fill:var(--purple)}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>Qwen3.6-35B-A3B Architecture</h1>
+  <div class="sub">40 layers &middot; 35B params &middot; 3B active per token &middot; 256K context</div>
+
+  <div class="tabs">
+    <button class="tab act" id="tab1" onclick="switchTab(1)">High-Level View</button>
+    <button class="tab" id="tab2" onclick="switchTab(2)">Transform Block Detail</button>
+  </div>
+
+  <div class="split">
+
+    <!-- LEFT: Diagrams -->
+    <div>
+      <!-- Tab 1 -->
+      <div class="diag-area" id="diag1">
+        <svg viewBox="0 0 540 370" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1c2333"/><stop offset="100%" stop-color="#161b22"/>
+            </linearGradient>
+          </defs>
+
+          <!-- Title -->
+          <text x="270" y="18" text-anchor="middle" class="sublbl" fill="var(--text)" font-weight="600">High-Level Architecture</text>
+
+          <!-- ===== COL 1: INPUT ===== -->
+          <rect x="15" y="35" width="155" height="310" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+          <rect x="15" y="35" width="155" height="18" rx="6" fill="var(--border)"/>
+          <text x="92" y="48" text-anchor="middle" class="meta" font-size="7" fill="var(--text)">INPUT</text>
+
+          <rect x="25" y="65" width="135" height="36" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-input-tokens" style="cursor:pointer"/>
+          <text x="92" y="87" text-anchor="middle" class="lbl">Input Tokens</text>
+          <line x1="92" y1="101" x2="92" y2="114" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="25" y="116" width="135" height="34" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-bpe" style="cursor:pointer"/>
+          <text x="92" y="134" text-anchor="middle" class="lbl">BPE Tokenizer</text>
+          <text x="92" y="145" text-anchor="middle" class="sublbl">vocab 248K</text>
+          <line x1="92" y1="150" x2="92" y2="163" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="25" y="165" width="135" height="34" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-embedding" style="cursor:pointer"/>
+          <text x="92" y="187" text-anchor="middle" class="lbl">Embedding</text>
+          <text x="92" y="196" text-anchor="middle" class="sublbl">248K &times; 2048</text>
+          <line x1="92" y1="199" x2="92" y2="212" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="25" y="214" width="135" height="34" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-mrope" style="cursor:pointer"/>
+          <text x="92" y="236" text-anchor="middle" class="lbl">mRoPE</text>
+          <text x="92" y="245" text-anchor="middle" class="sublbl">25% partial &middot; [11,11,10]</text>
+          <line x1="92" y1="248" x2="92" y2="261" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- ===== COL 2: TRANSFORM ===== -->
+          <rect x="190" y="35" width="160" height="310" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+          <rect x="190" y="35" width="160" height="18" rx="6" fill="var(--border)"/>
+          <text x="270" y="48" text-anchor="middle" class="meta" font-size="7" fill="var(--text)">TRANSFORM &times;40</text>
+
+          <rect x="200" y="65" width="140" height="24" rx="4" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-rmsnorm-attn" style="cursor:pointer"/>
+          <text x="270" y="81" text-anchor="middle" class="sublbl">RMSNorm</text>
+          <line x1="270" y1="89" x2="270" y2="102" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="200" y="104" width="140" height="38" rx="4" fill="url(#box)" stroke="var(--accent)" stroke-width="1.2" data-id="t1-attention" style="cursor:pointer"/>
+          <text x="270" y="122" text-anchor="middle" class="lbl accent">Attention</text>
+          <text x="270" y="135" text-anchor="middle" class="sublbl">Full or Gated DeltaNet</text>
+          <!-- Residual loop -->
+          <line x1="340" y1="65" x2="340" y2="240" stroke="var(--dim)" stroke-width="1" stroke-dasharray="2,2" opacity="0.25"/>
+          <text x="345" y="155" class="meta" font-size="7" fill="var(--dim)">+</text>
+          <line x1="270" y1="142" x2="270" y2="155" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="200" y="157" width="140" height="24" rx="4" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-rmsnorm-moe" style="cursor:pointer"/>
+          <text x="270" y="173" text-anchor="middle" class="sublbl">RMSNorm</text>
+          <line x1="270" y1="181" x2="270" y2="196" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="200" y="198" width="140" height="44" rx="4" fill="url(#box)" stroke="var(--purple)" stroke-width="1.2" data-id="t1-moe-ffn" style="cursor:pointer"/>
+          <text x="270" y="216" text-anchor="middle" class="lbl purple">MoE FFN</text>
+          <text x="270" y="232" text-anchor="middle" class="sublbl">top-8/256 + shared</text>
+          <line x1="270" y1="242" x2="270" y2="255" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- Legend -->
+          <rect x="200" y="265" width="8" height="8" rx="2" fill="url(#box)" stroke="var(--green)" stroke-width="1"/>
+          <text x="212" y="273" class="meta" font-size="6">30 GDN</text>
+          <rect x="255" y="265" width="8" height="8" rx="2" fill="url(#box)" stroke="var(--accent)" stroke-width="1"/>
+          <text x="267" y="273" class="meta" font-size="6">10 Full</text>
+
+          <!-- ===== COL 3: OUTPUT ===== -->
+          <rect x="370" y="35" width="155" height="310" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+          <rect x="370" y="35" width="155" height="18" rx="6" fill="var(--border)"/>
+          <text x="447" y="48" text-anchor="middle" class="meta" font-size="7" fill="var(--text)">OUTPUT</text>
+
+          <rect x="380" y="95" width="135" height="34" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-final-norm" style="cursor:pointer"/>
+          <text x="447" y="116" text-anchor="middle" class="lbl">Final RMSNorm</text>
+          <line x1="447" y1="129" x2="447" y2="142" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="380" y="144" width="135" height="34" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-lm-head" style="cursor:pointer"/>
+          <text x="447" y="165" text-anchor="middle" class="lbl">LM Head</text>
+          <text x="447" y="174" text-anchor="middle" class="sublbl">untied &middot; 2048&rarr;248K</text>
+          <line x1="447" y1="178" x2="447" y2="191" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="380" y="193" width="135" height="34" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" data-id="t1-next-token" style="cursor:pointer"/>
+          <text x="447" y="214" text-anchor="middle" class="lbl">Next Token</text>
+          <text x="447" y="223" text-anchor="middle" class="sublbl">logits &rarr; sample</text>
+
+          <rect x="380" y="248" width="135" height="28" rx="5" fill="url(#box)" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,2" data-id="t1-mtp" style="cursor:pointer"/>
+          <text x="447" y="265" text-anchor="middle" class="sublbl">MTP Head (optional)</text>
+
+          <!-- ===== HORIZONTAL ARROWS ===== -->
+          <line x1="170" y1="242" x2="188" y2="242" stroke="var(--dim)" stroke-width="1.2" marker-end="url(#ah1)"/>
+          <line x1="350" y1="242" x2="368" y2="242" stroke="var(--dim)" stroke-width="1.2" marker-end="url(#ah2)"/>
+          <defs>
+            <marker id="ah1" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
+              <polygon points="0 0, 5 2, 0 4" fill="var(--dim)"/>
+            </marker>
+            <marker id="ah2" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
+              <polygon points="0 0, 5 2, 0 4" fill="var(--dim)"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+
+      <!-- Tab 2 -->
+      <div class="diag-area none" id="diag2">
+        <svg viewBox="0 0 540 370" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="box2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1c2333"/><stop offset="100%" stop-color="#161b22"/>
+            </linearGradient>
+          </defs>
+          <text x="270" y="18" text-anchor="middle" class="sublbl" fill="var(--text)" font-weight="600">One Transform Block</text>
+
+          <!-- ===== COL 1: ATTENTION MIXER ===== -->
+          <rect x="15" y="30" width="170" height="320" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+          <rect x="15" y="30" width="170" height="18" rx="6" fill="var(--border)"/>
+          <text x="100" y="43" text-anchor="middle" class="meta" font-size="7" fill="var(--text)">ATTENTION MIXER</text>
+
+          <!-- Input -->
+          <text x="100" y="68" text-anchor="middle" class="sublbl accent">hidden [batch, seq, 2048]</text>
+          <line x1="100" y1="74" x2="100" y2="86" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="25" y="88" width="150" height="24" rx="4" fill="url(#box2)" stroke="var(--border)" stroke-width="1" data-id="t2-rmsnorm-attn" style="cursor:pointer"/>
+          <text x="100" y="104" text-anchor="middle" class="sublbl">RMSNorm</text>
+          <line x1="100" y1="112" x2="100" y2="126" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- Full Attention -->
+          <rect x="15" y="130" width="80" height="60" rx="4" fill="url(#box2)" stroke="var(--accent)" stroke-width="1.2" data-id="t2-full-attn" style="cursor:pointer"/>
+          <text x="55" y="148" text-anchor="middle" class="sublbl accent">Full Attn</text>
+          <text x="55" y="162" text-anchor="middle" class="meta" font-size="6">QKV + GQA</text>
+          <text x="55" y="174" text-anchor="middle" class="meta" font-size="6">QK-Norm</text>
+          <text x="55" y="185" text-anchor="middle" class="meta" font-size="6">softmax + gate</text>
+
+          <!-- GDN -->
+          <rect x="105" y="130" width="80" height="60" rx="4" fill="url(#box2)" stroke="var(--green)" stroke-width="1.2" data-id="t2-gdn" style="cursor:pointer"/>
+          <text x="145" y="148" text-anchor="middle" class="sublbl green">Gated DeltaNet</text>
+          <text x="145" y="162" text-anchor="middle" class="meta" font-size="6">QKVZ + conv1d</text>
+          <text x="145" y="174" text-anchor="middle" class="meta" font-size="6">delta rule</text>
+          <text x="145" y="185" text-anchor="middle" class="meta" font-size="6">recurrent/chunk</text>
+
+          <line x1="100" y1="190" x2="100" y2="206" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- O-proj + residual -->
+          <rect x="30" y="208" width="140" height="24" rx="4" fill="url(#box2)" stroke="var(--border)" stroke-width="1" data-id="t2-o-proj" style="cursor:pointer"/>
+          <text x="100" y="224" text-anchor="middle" class="sublbl">O-proj 4096&rarr;2048 + residual</text>
+          <line x1="100" y1="232" x2="100" y2="244" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- Arrow to col 2 -->
+          <rect x="30" y="246" width="140" height="14" rx="3" fill="url(#box2)" stroke="var(--border)" stroke-width="1" opacity="0.5"/>
+          <text x="100" y="256" text-anchor="middle" class="meta" font-size="6">to next stage &rarr;</text>
+
+          <!-- Legend -->
+          <rect x="25" y="275" width="8" height="8" rx="2" fill="url(#box2)" stroke="var(--accent)" stroke-width="1"/>
+          <text x="37" y="283" class="meta" font-size="6">10 layers</text>
+          <rect x="95" y="275" width="8" height="8" rx="2" fill="url(#box2)" stroke="var(--green)" stroke-width="1"/>
+          <text x="107" y="283" class="meta" font-size="6">30 layers</text>
+
+          <!-- ===== COL 2: MoE FFN ===== -->
+          <rect x="205" y="30" width="170" height="320" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+          <rect x="205" y="30" width="170" height="18" rx="6" fill="var(--border)"/>
+          <text x="290" y="43" text-anchor="middle" class="meta" font-size="7" fill="var(--text)">MoE FFN</text>
+
+          <rect x="230" y="88" width="120" height="24" rx="4" fill="url(#box2)" stroke="var(--border)" stroke-width="1" data-id="t2-rmsnorm-moe" style="cursor:pointer"/>
+          <text x="290" y="104" text-anchor="middle" class="sublbl">RMSNorm</text>
+          <line x1="290" y1="112" x2="290" y2="126" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- Router -->
+          <rect x="220" y="128" width="140" height="32" rx="4" fill="url(#box2)" stroke="var(--purple)" stroke-width="1.2" data-id="t2-router" style="cursor:pointer"/>
+          <text x="290" y="146" text-anchor="middle" class="sublbl purple">Router 2048 &rarr; 256</text>
+          <text x="290" y="156" text-anchor="middle" class="meta" font-size="6">softmax &rarr; top-8 &rarr; renormalize</text>
+          <line x1="290" y1="160" x2="290" y2="174" stroke="var(--dim)" stroke-width="1"/>
+
+          <!-- Experts -->
+          <rect x="220" y="176" width="140" height="28" rx="4" fill="url(#box2)" stroke="var(--border)" stroke-width="1" data-id="t2-experts" style="cursor:pointer"/>
+          <text x="290" y="188" text-anchor="middle" class="sublbl">Expert SwiGLU &times; 8</text>
+          <text x="290" y="198" text-anchor="middle" class="meta" font-size="6">gate_up_proj + down_proj</text>
+
+          <rect x="220" y="210" width="140" height="28" rx="4" fill="url(#box2)" stroke="var(--border)" stroke-width="1" data-id="t2-shared" style="cursor:pointer"/>
+          <text x="290" y="222" text-anchor="middle" class="sublbl">+ Shared Expert</text>
+          <text x="290" y="233" text-anchor="middle" class="meta" font-size="6">always active &middot; scalar gate</text>
+
+          <line x1="290" y1="238" x2="290" y2="250" stroke="var(--dim)" stroke-width="1"/>
+
+          <rect x="230" y="252" width="120" height="24" rx="4" fill="url(#box2)" stroke="var(--border)" stroke-width="1" data-id="t2-residual" style="cursor:pointer"/>
+          <text x="290" y="268" text-anchor="middle" class="sublbl">+ residual</text>
+
+          <rect x="230" y="282" width="120" height="14" rx="3" fill="url(#box2)" stroke="var(--border)" stroke-width="1" opacity="0.5"/>
+          <text x="290" y="293" text-anchor="middle" class="meta" font-size="6">output &rarr;</text>
+
+          <!-- ===== COL 3: KEY NUMBERS ===== -->
+          <rect x="395" y="30" width="130" height="320" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+          <rect x="395" y="30" width="130" height="18" rx="6" fill="var(--border)"/>
+          <text x="460" y="43" text-anchor="middle" class="meta" font-size="7" fill="var(--text)">KEY NUMBERS</text>
+
+          <text x="405" y="68" class="sublbl accent" font-weight="600">Full Attention</text>
+          <text x="405" y="84" class="meta" font-size="6">Q: 16hd &times; 256dim</text>
+          <text x="405" y="96" class="meta" font-size="6">K: 2hd &times; 256dim</text>
+          <text x="405" y="108" class="meta" font-size="6">V: 2hd &times; 256dim</text>
+          <text x="405" y="120" class="meta" font-size="6">GQA ratio 16:2 = 8&times;</text>
+          <text x="405" y="132" class="meta" font-size="6">QK-Norm per head</text>
+          <text x="405" y="144" class="meta" font-size="6">Gate from q_proj 2&times; out</text>
+
+          <text x="405" y="170" class="sublbl green" font-weight="600">Gated DeltaNet</text>
+          <text x="405" y="186" class="meta" font-size="6">key: 16hd &times; 128dim</text>
+          <text x="405" y="198" class="meta" font-size="6">val: 32hd &times; 128dim</text>
+          <text x="405" y="210" class="meta" font-size="6">conv1d: kernel=4</text>
+          <text x="405" y="222" class="meta" font-size="6">delta rule recurrence</text>
+          <text x="405" y="234" class="meta" font-size="6">O(n) time, O(1) mem</text>
+
+          <text x="405" y="260" class="sublbl purple" font-weight="600">MoE FFN</text>
+          <text x="405" y="276" class="meta" font-size="6">256 experts total</text>
+          <text x="405" y="288" class="meta" font-size="6">8 active per token</text>
+          <text x="405" y="300" class="meta" font-size="6">Expert: 3.15M params</text>
+          <text x="405" y="312" class="meta" font-size="6">Shared: +3.15M params</text>
+
+          <!-- Arrow between col 1 and 2 -->
+          <line x1="185" y1="140" x2="203" y2="140" stroke="var(--dim)" stroke-width="1.2" marker-end="url(#ah3)"/>
+          <defs>
+            <marker id="ah3" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
+              <polygon points="0 0, 5 2, 0 4" fill="var(--dim)"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <!-- RIGHT: Annotations -->
+    <div class="ann" id="annPanel">
+      <h2>Overview</h2>
+      <p>The model processes text through <strong>three stages</strong>, left to right.</p>
+
+      <h3>Input Stage</h3>
+      <p>BPE tokenizer maps text to token IDs (<code>vocab 248,320</code>). Embedding lookup table maps each ID to a <code>2048-dim</code> vector. mRoPE adds 3D positional encoding (25% partial rotary, sections <code>[11,11,10]</code>).</p>
+
+      <h3>Transform Blocks &times;40</h3>
+      <p>Each block = <strong>RMSNorm &rarr; Attention &rarr; +residual &rarr; RMSNorm &rarr; MoE FFN &rarr; +residual</strong>. Two residual connections preserve gradient flow through all 40 layers.</p>
+
+      <h3>Output Stage</h3>
+      <p>Final RMSNorm, then <strong>LM Head</strong> (<code>2048 &rarr; 248,320</code>, untied) produces logits. Optional <strong>MTP head</strong> predicts a second token for speculative decoding.</p>
+
+      <h3>Model at a Glance</h3>
+      <table>
+        <tr><td class="k">Total params</td><td class="v hl">~35B</td></tr>
+        <tr><td class="k">Active/token</td><td class="v hl">~3B</td></tr>
+        <tr><td class="k">Hidden dim</td><td class="v">2048</td></tr>
+        <tr><td class="k">Layers</td><td class="v">40 (30 GDN + 10 Full)</td></tr>
+        <tr><td class="k">Experts</td><td class="v hl">256 (8 active)</td></tr>
+        <tr><td class="k">Heads Q/KV</td><td class="v">16 / 2 (GQA 8:1)</td></tr>
+        <tr><td class="k">Head dim</td><td class="v hl">256</td></tr>
+        <tr><td class="k">Context</td><td class="v">262,144 tokens</td></tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const annPanel = document.getElementById('annPanel');
+let currentTab = 1;
+
+// Per-component annotations
+const compAnn = {
+  // Tab 1
+  't1-input-tokens': '<h2>Input Tokens</h2><p>Raw text enters the model as a sequence of token IDs. The tokenizer (BPE) splits text into subword units from a vocabulary of <code>248,320</code> tokens. Special tokens include BOS/EOS (<code>248044</code>), image tokens (<code>248053–248057</code>), and padding is unused.</p>',
+  't1-bpe': '<h2>BPE Tokenizer</h2><p>Byte-Pair Encoding with <code>248,320</code> vocabulary size. Subword tokenization handles rare words gracefully. The tokenizer is shared across text, image, and video modalities (special tokens interleave visual features).</p>',
+  't1-embedding': '<h2>Embedding Lookup</h2><p>Each token ID maps to a <code>2048</code>-dimensional vector via a learned lookup table: <code>W_emb &isin; R<sup>248320&times;2048</sup></code>. That is <strong>509 million parameters</strong>. Untied from the LM head — the input and output embedding matrices are separate.</p>',
+  't1-mrope': '<h2>mRoPE</h2><p>3D Multi-Resolution Rotary Position Embedding. Only <strong>25% of head dims</strong> (64 of 256) receive rotary encoding — the rest stay position-free for content. Sections <code>[11, 11, 10]</code> encode temporal (T), height (H), and width (W) dimensions, interleaved as <code>THWTHW...</code>. RoPE theta = <code>10,000,000</code>.</p>',
+  't1-rmsnorm-attn': '<h2>RMSNorm (pre-attention)</h2><p>Root Mean Square normalization applied before the attention mixer. Stabilizes training and improves gradient flow. Applied per-token, per-dimension: <code>RMSNorm(x) = x / RMS(x) &times; &gamma;</code> where <code>&gamma;</code> is a learned scale vector of size 2048.</p>',
+  't1-attention': '<h2>Attention Mixer</h2><p>Varies by layer index. <strong>30 layers</strong> use <strong>Gated DeltaNet</strong> — a linear recurrence (O(n) time, O(1) memory) with gated delta rule, conv1d (kernel=4), and per-head output gate. <strong>10 layers</strong> (every 4th: indices 3,7,11,...,39) use <strong>Full Attention</strong> with GQA (16 Q heads, 2 KV heads, ratio 8:1), head dim 256, QK-Norm, and output gate built into q_proj.</p>',
+  't1-rmsnorm-moe': '<h2>RMSNorm (pre-FFN)</h2><p>Second normalization within the transform block, applied before the MoE FFN. Same RMSNorm structure as the pre-attention norm. Together with the residual connections, this forms a Pre-LN transformer architecture.</p>',
+  't1-moe-ffn': '<h2>MoE FFN</h2><p><strong>Router</strong>: Linear <code>2048 &rarr; 256</code>, softmax, selects <strong>top-8</strong> experts per token, renormalizes weights. <strong>256 experts</strong>, each a SwiGLU FFN: <code>SiLU(xW_gate) &odot; xW_up)W_down</code>, intermediate dim 512. <strong>Shared expert</strong>: same structure, always active, gated by learned scalar <code>sigmoid(Linear(x))</code>. Router aux loss (coeff <code>0.001</code>) ensures uniform expert utilization.</p>',
+  't1-final-norm': '<h2>Final RMSNorm</h2><p>Applied to the output of the last transform block before the LM head. Same RMSNorm structure. This is the final normalization before projecting to vocabulary space.</p>',
+  't1-lm-head': '<h2>LM Head</h2><p>Linear projection <code>2048 &rarr; 248,320</code>. <strong>Untied</strong> from the input embedding — a separate <strong>509M parameter</strong> matrix. Produces raw logits over the vocabulary. Equivalent to computing dot-product similarity between the final hidden state and each token embedding in the output embedding space.</p>',
+  't1-next-token': '<h2>Next Token Sampling</h2><p>Logits are converted to probabilities via softmax, then sampled (greedy, top-p, or temperature). The sampled token is appended to the sequence and fed back as input for the next autoregressive step. Temperature, top_p, and top_k control sampling diversity.</p>',
+  't1-mtp': '<h2>MTP Head</h2><p>Multi-Token Prediction: an additional layer that predicts <strong>token<sub>t+2</sub></strong> from the same hidden state. Enables <strong>self-speculative decoding</strong> — the model acts as its own draft model, producing 2 tokens per forward pass. <code>mtp_num_hidden_layers=1</code>, no dedicated embeddings.</p>',
+  // Tab 2
+  't2-rmsnorm-attn': '<h2>RMSNorm (pre-attention)</h2><p>First normalization in the block. Input shape: <code>[batch, seq, 2048]</code>. Applied before the attention mixer. Stabilizes training and enables deeper networks.</p>',
+  't2-full-attn': '<h2>Full Attention</h2><p>Used in <strong>10 layers</strong> (every 4th). <strong>Q projection</strong>: <code>16 hd &times; 256 dim &times; 2</code> — doubled output! Second half becomes an element-wise gate via <code>sigmoid</code>. <strong>K projection</strong>: <code>2 hd &times; 256 dim</code>. <strong>V projection</strong>: <code>2 hd &times; 256 dim</code>. <strong>GQA ratio</strong>: 16:2 = 8&times; KV cache reduction. <strong>QK-Norm</strong>: RMSNorm per head before RoPE. <strong>mRoPE</strong>: 25% partial (64/256 dims). Output: <code>softmax(QK<sup>T</sup>/&radic;256) &times; V</code>, gated, then O-proj.</p>',
+  't2-gdn': '<h2>Gated DeltaNet</h2><p>Used in <strong>30 layers</strong>. <strong>Key heads</strong>: 16 &times; dim 128. <strong>Value heads</strong>: 32 &times; dim 128. <strong>Conv1d</strong>: depthwise causal, kernel=4, applied to QKV. <strong>Delta rule</strong>: <code>S<sub>t</sub> = (1-&beta;)S<sub>t-1</sub> + &beta; v k<sup>T</sup></code>, output: <code>o<sub>t</sub> = S<sub>t</sub> q</code>. <strong>Two modes</strong>: recurrent (single-token decode) and chunked (parallel prefill). <strong>O(n) time, O(1) memory</strong> per layer. Output gated by <code>z</code> projection via RMSNorm-gating.</p>',
+  't2-o-proj': '<h2>O-projection + Residual</h2><p>Attention output (4096-dim) is projected back to <code>2048</code> via a learned linear layer. The <strong>residual connection</strong> adds the original input: <code>x = x + attn_output</code>. This skip connection preserves gradient flow and enables training very deep networks by providing a direct path for the identity function.</p>',
+  't2-rmsnorm-moe': '<h2>RMSNorm (pre-MoE)</h2><p>Second normalization, applied after the attention residual. Prepares the representation for the MoE FFN. Same structure as the pre-attention norm.</p>',
+  't2-router': '<h2>Router</h2><p>Learned gating: <code>Linear(2048 &rarr; 256)</code>. Computes softmax scores over all 256 experts, selects <strong>top-8</strong> via topk, renormalizes their weights to sum to 1. The router is trained to balance expert utilization via an auxiliary load-balancing loss (coefficient <code>0.001</code>).</p>',
+  't2-experts': '<h2>Expert SwiGLU &times;8</h2><p>Each selected expert runs a SwiGLU FFN: merged <code>gate_up_proj</code> (shape <code>[256, 1024, 2048]</code>) is chunked into gate and up, <code>SiLU(gate) &times; up</code>, then <code>down_proj [256, 2048, 512]</code>. Expert intermediate dim = 512, output dim = 2048. Per-expert params: <strong>3.15M</strong>. Outputs are weighted by router scores and summed: <code>&Sigma; w<sub>e</sub> &times; expert<sub>e</sub>(x)</code>.</p>',
+  't2-shared': '<h2>Shared Expert</h2><p>Identical SwiGLU structure to routed experts (2048 &rarr; 512 &rarr; 2048), but <strong>always active</strong> for every token. Gated by a learned scalar: <code>sigmoid(Linear(x, 1)) &times; shared(x)</code>. Handles common knowledge patterns, preventing the router from wasting capacity on frequent patterns. <strong>3.15M params</strong>, added to the routed expert output.</p>',
+  't2-residual': '<h2>+ Residual</h2><p>Final residual connection: <code>x = x + moe_output</code>. The block output returns to the same shape <code>[batch, seq, 2048]</code>. Together with the attention residual, this forms the standard Pre-LN transformer pattern: two sub-blocks, each with normalization + computation + skip connection.</p>',
+};
+
+const annContent = {
+  1: `
+    <h2>Three-Stage Pipeline</h2>
+    <p>Text flows through <strong>three stages</strong>, left to right. Each stage transforms the representation.</p>
+
+    <h3>1. Input Stage</h3>
+    <p><strong>BPE Tokenizer</strong> splits text into tokens from a <code>248,320</code> vocabulary. The <strong>embedding lookup</strong> maps each token ID to a <code>2048</code>-dimension vector (509M params). <strong>mRoPE</strong> adds 3D positional encoding — only 25% of head dims receive rotary encoding (64 of 256), the rest stay position-free for content.</p>
+
+    <h3>2. Transform Blocks &times;40</h3>
+    <p>Each of the 40 layers follows the same structure:</p>
+    <p><code>RMSNorm &rarr; Attention &rarr; + residual &rarr; RMSNorm &rarr; MoE FFN &rarr; + residual</code></p>
+    <p>The <strong>attention mixer</strong> varies: <strong>30 layers</strong> use Gated DeltaNet (linear recurrence, O(n)), and <strong>10 layers</strong> (every 4th) use full softmax attention with GQA.</p>
+    <p>The <strong>MoE FFN</strong> routes each token through a learned gate to <strong>8 of 256 experts</strong>, plus a shared expert. Load balancing loss keeps experts uniformly utilized.</p>
+
+    <h3>3. Output Stage</h3>
+    <p><strong>Final RMSNorm</strong> &rarr; <strong>LM Head</strong> (untied, 2048 &rarr; 248,320) &rarr; <strong>next token</strong> sampled from logits. Optional <strong>MTP head</strong> predicts token_{t+2} for self-speculative decoding.</p>
+
+    <h3>Key Numbers</h3>
+    <table>
+      <tr><td class="k">Total params</td><td class="v hl">~35B</td></tr>
+      <tr><td class="k">Active per token</td><td class="v hl">~3B</td></tr>
+      <tr><td class="k">Hidden dim</td><td class="v">2048</td></tr>
+      <tr><td class="k">Layers</td><td class="v">40 (30 GDN + 10 Full)</td></tr>
+      <tr><td class="k">Q heads / KV heads</td><td class="v">16 / 2 (GQA 8:1)</td></tr>
+      <tr><td class="k">Head dim</td><td class="v hl">256</td></tr>
+      <tr><td class="k">Experts</td><td class="v hl">256 (8 active)</td></tr>
+      <tr><td class="k">Context</td><td class="v">262K tokens</td></tr>
+      <tr><td class="k">Vocab</td><td class="v">248,320</td></tr>
+    </table>
+  `,
+  2: `
+    <h2>One Transform Block</h2>
+    <p>Every layer has the same two-sub-block structure. The <strong>attention mixer</strong> varies by layer index; the <strong>MoE FFN</strong> is identical across all 40 layers.</p>
+
+    <h3>Attention Mixer</h3>
+    <p><strong>Full Attention</strong> (10 layers, every 4th):</p>
+    <table>
+      <tr><td class="k">Q projection</td><td class="v">16 hd &times; 256 dim &times; <strong>2</strong></td></tr>
+      <tr><td class="k"></td><td class="v">(doubled: gate from 2nd half)</td></tr>
+      <tr><td class="k">K projection</td><td class="v">2 hd &times; 256 dim</td></tr>
+      <tr><td class="k">V projection</td><td class="v">2 hd &times; 256 dim</td></tr>
+      <tr><td class="k">GQA ratio</td><td class="v hl">16:2 = 8&times; KV cache reduction</td></tr>
+      <tr><td class="k">QK-Norm</td><td class="v">RMSNorm per head</td></tr>
+      <tr><td class="k">RoPE</td><td class="v">25% partial, mRoPE [11,11,10]</td></tr>
+      <tr><td class="k">Output gate</td><td class="v">sigmoid(gate) &times; attn_output</td></tr>
+      <tr><td class="k">O projection</td><td class="v">4096 &rarr; 2048</td></tr>
+    </table>
+
+    <p><strong>Gated DeltaNet</strong> (30 layers):</p>
+    <table>
+      <tr><td class="k">Key heads</td><td class="v">16 &times; dim 128</td></tr>
+      <tr><td class="k">Value heads</td><td class="v">32 &times; dim 128</td></tr>
+      <tr><td class="k">Conv1d</td><td class="v">kernel=4, depthwise causal</td></tr>
+      <tr><td class="k">Recurrence</td><td class="v hl">gated delta rule, O(n)</td></tr>
+      <tr><td class="k">State update</td><td class="v">S_t = (1-β)S_{t-1} + β v k^T</td></tr>
+      <tr><td class="k">Output gate</td><td class="v">z projection &rarr; RMSNorm-gated</td></tr>
+      <tr><td class="k">O projection</td><td class="v">4096 &rarr; 2048</td></tr>
+    </table>
+
+    <h3>MoE FFN</h3>
+    <table>
+      <tr><td class="k">Router</td><td class="v">Linear 2048 &rarr; 256</td></tr>
+      <tr><td class="k">Selection</td><td class="v hl">top-8 of 256 experts</td></tr>
+      <tr><td class="k">Expert structure</td><td class="v">SwiGLU: gate_up + down_proj</td></tr>
+      <tr><td class="k">Expert size</td><td class="v">2048 &rarr; 512 &rarr; 2048 (3.15M)</td></tr>
+      <tr><td class="k">Shared expert</td><td class="v">Same SwiGLU, scalar gate</td></tr>
+      <tr><td class="k">Load balance</td><td class="v">aux loss coeff = 0.001</td></tr>
+    </table>
+  `
+};
+
+function switchTab(n) {
+  currentTab = n;
+  document.getElementById('tab1').classList.toggle('act', n === 1);
+  document.getElementById('tab2').classList.toggle('act', n === 2);
+  document.getElementById('diag1').classList.toggle('none', n !== 1);
+  document.getElementById('diag2').classList.toggle('none', n !== 2);
+  annPanel.innerHTML = annContent[n];
+}
+
+function findDataId(el) {
+  while (el && el !== document.body) {
+    if (el.dataset && el.dataset.id) return el.dataset.id;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+document.querySelector('.split').addEventListener('click', function(e) {
+  const id = findDataId(e.target);
+  if (id && compAnn[id]) {
+    annPanel.innerHTML = compAnn[id];
+  }
+});
+</script>
+</body>
+</html>

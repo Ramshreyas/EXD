@@ -122,7 +122,7 @@ Key metrics to watch:
 
 ## Interactive Simulator
 
-Open the [Inference Pipeline Simulator](https://huggingface.co/spaces/EXD-AI/inference-simulator) to visualize prefill, decode, and KV cache behaviour step by step.
+Open the [Inference Pipeline Simulator](https://huggingface.co/spaces/EXDai/inference-simulator) to visualize prefill, decode, and KV cache behaviour step by step.
 
 ---
 
