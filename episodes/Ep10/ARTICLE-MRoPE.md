@@ -9,7 +9,7 @@
 
 ## 1. The Problem: Position Must Exist
 
-A token embedding is a vector — a point in $R^{2048}$. The embedding for `␣cat`
+A token embedding is a vector — a point in \\(\\mathbb{R}^{2048}\\). The embedding for `␣cat`
 is the same vector regardless of where it appears in a sentence. This is correct:
 "cat" means cat. But it creates a problem.
 
@@ -48,9 +48,9 @@ the dog barked               ← positions (0, 1, 2)
 
 The absolute positions are completely different: $(8,9,10)$ vs $(0,1,2)$. But the
 **meaning** of the sequence — the relationship between tokens — is identical. An
-absolute position encoding forces the model to learn "$\texttt{the}$ at position 8
-followed by $\texttt{dog}$ at position 9" as completely separate from
-"$\texttt{the}$ at position 0 followed by $\texttt{dog}$ at position 1." This is
+absolute position encoding forces the model to learn "\\(\texttt{the}\\) at position 8
+followed by \\(\texttt{dog}\\) at position 9" as completely separate from
+"\\(\texttt{the}\\) at position 0 followed by \\(\texttt{dog}\\) at position 1." This is
 wasteful: the model re-learns the same linguistic pattern at every possible
 coordinate.
 
@@ -69,7 +69,7 @@ the dog barked               ← positions (0, 1, 2)
 ```
 
 In both versions, `the` and `dog` are adjacent —
-$q-p = 1$ in both cases. 
+\\(q-p = 1\\) in both cases. 
 
 Put mathematically, if position encoding is doing its job, the dot product
 between these two tokens (which drives attention, as we'll see later) should be the same regardless of
@@ -83,16 +83,16 @@ $$\langle\,R_p(a),\; R_q(b)\,\rangle = f(a, b,\; q-p)$$
 
 The dot product between two rotated tokens should depend on:
 
-1. **Who the tokens are** — $a$ and $b$, their semantic embeddings
-2. **How far apart they are** — the signed relative offset $q-p$
-3. **Nothing else** — not on $p$ or $q$ individually
+1. **Who the tokens are** — \\(a\\) and \\(b\\), their semantic embeddings
+2. **How far apart they are** — the signed relative offset \\(q-p\\)
+3. **Nothing else** — not on \\(p\\) or \\(q\\) individually
 
 This is **translation invariance** for relative position. Whether a pair of tokens
 appears at $(0, 1)$ or $(1000, 1001)$, the attention score between them is the same.
 
 Among the family of transformations that satisfy this property, **rotation** is the
 natural choice. It preserves vector norms (semantic information isn't distorted) and
-has the group property $R_p^T R_q = R_{q-p}$, which is exactly what delivers
+has the group property \\(R_p^T R_q = R_{q-p}\\), which is exactly what delivers
 translation invariance.
 
 ---
@@ -103,7 +103,7 @@ Let's make this concrete. Start with a simple vector in 2D:
 
 $$a = \begin{bmatrix} 1 \\ 0 \end{bmatrix}$$
 
-A 2D rotation matrix rotates a vector counterclockwise by angle $\theta$:
+A 2D rotation matrix rotates a vector counterclockwise by angle \\(\theta\\):
 
 $$R_\theta = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix}$$
 
@@ -124,7 +124,7 @@ $$\theta = \tfrac{3\pi}{2}: \quad \cos(\tfrac{3\pi}{2}) = 0,\; \sin(\tfrac{3\pi}
 $$\theta = 2\pi: \quad \cos(2\pi) = 1,\; \sin(2\pi) = 0 \quad\Rightarrow\quad R_{2\pi} a = \begin{bmatrix} 1 \\ 0 \end{bmatrix}$$
 
 The vector traces the unit circle: right → up → left → down → back to right.
-At every step, $\|R_\theta a\| = \sqrt{\cos^2\theta + \sin^2\theta} = 1$ —
+At every step, \\(\|R_\theta a\| = \sqrt{\cos^2\theta + \sin^2\theta} = 1\\) —
 **rotation preserves length**, so values stay bounded no matter how many times
 the vector is rotated.
 
@@ -143,7 +143,7 @@ In the plane:
                   │
 ```
 
-The single vector $a = [1,0]$ spins through these four positions as $\theta$
+The single vector \\(a = [1,0]\\) spins through these four positions as \\(\theta\\)
 increases. All four have the same length (1) — rotation is an **isometry**:
 it moves the vector without stretching or shrinking. This matters in practice
 because values stay bounded (no vanishing or exploding), even after being
@@ -153,8 +153,8 @@ rotated repeatedly across dozens of transformer layers.
 
 ### 1.4 Translation Invariance, Demonstrated
 
-Now set the rotation angle proportional to position: $\theta_p = p \cdot \omega$.
-Choose $\omega = \pi/2$ (90° per position step) for clean arithmetic.
+Now set the rotation angle proportional to position: \\(\theta_p = p \cdot \omega\\).
+Choose \\(\omega = \pi/2\\) (90° per position step) for clean arithmetic.
 
 Consider the sentence:
 
@@ -180,22 +180,22 @@ $$R_1 a = R_{90°}\,a = \begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix} \begin{bma
 
 $$R_2 b = R_{180°}\,b = \begin{bmatrix} -1 & 0 \\ 0 & -1 \end{bmatrix} \begin{bmatrix} 0 \\ 1 \end{bmatrix} = \begin{bmatrix} 0 \\ -1 \end{bmatrix}$$
 
-Their dot product: $(0)(0) + (1)(-1) = -1$.
+Their dot product: \\((0)(0) + (1)(-1) = -1\\).
 
-More generally, for any two vectors $a$ and $b$, the dot product after rotation depends
-only on the relative offset $q-p$:
+More generally, for any two vectors \\(a\\) and \\(b\\), the dot product after rotation depends
+only on the relative offset \\(q-p\\):
 
 $$(R_p a) \cdot (R_q b) = \sin\!\big((q-p) \cdot \tfrac{\pi}{2}\big)$$
 
 Now let's compute the second occurrence — `the` at position 7 and `cat` at
-position 8 — same offset $q-p = 1$, different positions:
+position 8 — same offset \\(q-p = 1\\), different positions:
 
 $$\theta_7 = 7 \cdot \tfrac{\pi}{2} = \tfrac{7\pi}{2} \equiv 270°,\qquad
   \theta_8 = 8 \cdot \tfrac{\pi}{2} = 4\pi \equiv 0°$$
 
-For 270°: $\cos(270°) = 0$, $\sin(270°) = -1$, so the rotation matrix is
-$R_{270°} = \begin{bmatrix} 0 & 1 \\ -1 & 0 \end{bmatrix}$.
-For 0°: $\cos(0°) = 1$, $\sin(0°) = 0$, giving $R_{0°} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$.
+For 270°: \\(\cos(270°) = 0\\), \\(\sin(270°) = -1\\), so the rotation matrix is
+\\(R_{270°} = \begin{bmatrix} 0 & 1 \\ -1 & 0 \end{bmatrix}\\).
+For 0°: \\(\cos(0°) = 1\\), \\(\sin(0°) = 0\\), giving \\(R_{0°} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}\\).
 
 Now apply them:
 
@@ -208,11 +208,11 @@ $$(R_7 a) \cdot (R_8 b) = (0)(0) + (-1)(1) = -1$$
 Same dot product: $-1$. Despite being 6 positions to the right, the attention
 score is identical.
 
-For comparison, a different offset. For $q-p = 2$ (180° apart):
+For comparison, a different offset. For \\(q-p = 2\\) (180° apart):
 
 $$(R_0 a) \cdot (R_2 b) = \sin(\pi) = 0$$
 
-**Summary:** the dot product depends on $q-p$, not on $(p,q)$. Shift both tokens
+**Summary:** the dot product depends on \\(q-p\\), not on \\((p,q)\\). Shift both tokens
 by any amount — as long as the offset stays the same, the attention score stays
 the same. This is what we set out to achieve in §1.2.
 
@@ -220,14 +220,14 @@ the same. This is what we set out to achieve in §1.2.
 
 ### 1.5 From Toy to Real: What Changes in Actual RoPE
 
-The toy example uses a **single frequency** $\omega = \pi/2$ on a **single 2D vector**.
+The toy example uses a **single frequency** \\(\omega = \pi/2\\) on a **single 2D vector**.
 Now let's build up to what Qwen3.6 actually does, step by step.
 
-**Step 1 — 2048 dimensions.** A token embedding is a vector in $R^{2048}$,
-not $R^2$. But we don't rotate the whole thing as one block. Instead, we 
+**Step 1 — 2048 dimensions.** A token embedding is a vector in \\(\\mathbb{R}^{2048}\\),
+not \\(\mathbb{R}^2\\). But we don't rotate the whole thing as one block. Instead, we 
 split it into smaller subspaces, and only rotate them (actually, part of them).
 
-**Step 2 — Split into 256-dimensional subspaces.** $2048 \div 256 = 8$. Each 256-D
+**Step 2 — Split into 256-dimensional subspaces.** \\(2048 \div 256 = 8\\). Each 256-D
 chunk is called a *pseudo-head* (the actual model has 16 real attention heads, but
 the embedding splits cleanly into 8 groups of 256). We'll apply the rotation
 independently within each pseudo-head.
@@ -235,16 +235,16 @@ independently within each pseudo-head.
 **Step 3 — Within each head, only 64 of the 256 dims rotate.** The remaining 192
 are *position-free* — they stay exactly as they are, carrying pure semantic
 information. The 64 rotary dimensions pair up to form **32 frequency pairs**:
-$(d_0, d_1), (d_2, d_3), \ldots, (d_{62}, d_{63})$. Each pair rotates like our toy
+\\((d_0, d_1), (d_2, d_3), \ldots, (d_{62}, d_{63})\\). Each pair rotates like our toy
 2D vector, but at its own frequency.
 
-**Step 4 — A different frequency for each pair.** Instead of one $\omega$, we
+**Step 4 — A different frequency for each pair.** Instead of one \\(\omega\\), we
 need 32 of them:
 
 $$\omega_i = \frac{1}{10\,000\,000\,^{\,2i / 64}}, \qquad i = 0, 1, \ldots, 31$$
 
-Pair 0 (fast): $\omega_0 = 1$ — completes a full rotation every $2\pi$ positions.
-Pair 31 (slow): $\omega_{31} \approx 10^{-7}$ — barely moves over thousands of
+Pair 0 (fast): \\(\omega_0 = 1\\) — completes a full rotation every \\(2\pi\\) positions.
+Pair 31 (slow): \\(\omega_{31} \approx 10^{-7}\\) — barely moves over thousands of
 positions. Together they form a **frequency ladder** that captures positional
 relationships at every scale, from adjacent words to paragraph-spanning patterns.
 
@@ -252,7 +252,7 @@ relationships at every scale, from adjacent words to paragraph-spanning patterns
 + images + video). So those 32 frequency pairs are split across three spatial
 dimensions: 11 for temporal (T), 11 for height (H), 10 for width (W), interleaved
 as THWTHWTHW... For text-only input, T = H = W = position, so mRoPE reduces to
-standard RoPE. For images, each visual token has distinct $(t, h, w)$ coordinates,
+standard RoPE. For images, each visual token has distinct \\((t, h, w)\\) coordinates,
 giving the model native 3D spatial awareness.
 
 We'll build each of these steps in detail in the sections ahead.
@@ -329,14 +329,14 @@ The 64 rotary dimensions pair up to form **32 frequency pairs**:
 $$\text{pair } 0: (d_0, d_1),\; \text{pair } 1: (d_2, d_3),\; \ldots,\; \text{pair } 31: (d_{62}, d_{63})$$
 
 Each pair behaves like our toy 2D vector from §1.4 — it gets rotated by an angle
-$p \cdot \omega_i$ that depends on position. The 192 frozen dimensions carry
+\\(p \cdot \omega_i\\) that depends on position. The 192 frozen dimensions carry
 "what the token IS" — semantics that don't change with position.
 
 ---
 
 ## 4. Step 4 — The Frequency Ladder
 
-Each of the 32 pairs gets its own frequency $\omega_i$. The formula:
+Each of the 32 pairs gets its own frequency \\(\omega_i\\). The formula:
 
 $$\omega_i = \frac{1}{\theta^{\,2i / d}}, \qquad \theta = 10\,000\,000,\; d = 64$$
 
@@ -447,7 +447,7 @@ Pair             positions    q-p      dot product
 (the,cat) vs (the,dog) diff:  0.000384  ← different words
 ```
 
-Same token pair, same $q-p$, different absolute positions → identical dot product
+Same token pair, same \\(q-p\\), different absolute positions → identical dot product
 to 10 decimal places. Different token pair at the same offset → different dot
 product. This is exactly the property we asked for in §1.2: the attention score
 between two tokens depends on **who they are** and **how far apart they are** —
