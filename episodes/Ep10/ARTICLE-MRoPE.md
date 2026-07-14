@@ -9,7 +9,7 @@
 
 ## 1. The Problem: Position Must Exist
 
-A token embedding is a vector — a point in $\mathbb{R}^{2048}$. The embedding for `␣cat`
+A token embedding is a vector — a point in $\mathbf{R}^{2048}$. The embedding for `␣cat`
 is the same vector regardless of where it appears in a sentence. This is correct:
 "cat" means cat. But it creates a problem.
 
@@ -223,8 +223,8 @@ the same. This is what we set out to achieve in §1.2.
 The toy example uses a **single frequency** $\omega = \pi/2$ on a **single 2D vector**.
 Now let's build up to what Qwen3.6 actually does, step by step.
 
-**Step 1 — 2048 dimensions.** A token embedding is a vector in $\mathbb{R}^{2048}$,
-not $\mathbb{R}^2$. But we don't rotate the whole thing as one block. Instead, we 
+**Step 1 — 2048 dimensions.** A token embedding is a vector in $\mathbf{R}^{2048}$,
+not $\mathbf{R}^2$. But we don't rotate the whole thing as one block. Instead, we 
 split it into smaller subspaces, and only rotate them (actually, part of them).
 
 **Step 2 — Split into 256-dimensional subspaces.** $2048 \div 256 = 8$. Each 256-D
