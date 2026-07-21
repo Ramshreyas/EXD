@@ -9,7 +9,7 @@
 
 ## 1. The Problem: Position Must Exist
 
-A token embedding is a vector — a point in \\(\\mathbb{R}^{2048}\\). The embedding for `␣cat`
+A token embedding is a vector — a point in \\(\mathbb{R}^{2048}\\). The embedding for `␣cat`
 is the same vector regardless of where it appears in a sentence. This is correct:
 "cat" means cat. But it creates a problem.
 

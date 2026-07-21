@@ -61,8 +61,8 @@ This directly enforces "work backwards." The guided tour shows the whole machine
 | 06 | ⬜ Planned | *(gap / placeholder)* | — |
 | 07 | ✅ Complete | Tokenization & Embeddings | BPE, token→vector lookup, embedding spaces, qwen tokenizer internals |
 | 08 | ✅ Complete | Positional Embeddings | Sinusoidal → learned → RoPE, how attention knows token order |
-| 09 | 🚧 In Progress | Qwen 3 Architecture — A Guided Tour | Qwen3 technical report as map; interactive HF Space architecture diagram; sets up deep-dive pipeline for Ep10+ |
-| 10 | 🚧 In Progress | mRoPE — The Geometry of Position | Deep dive on multi-resolution RoPE; build from scratch, rotate real Qwen embeddings, visual PCA orbits, translation invariance demo |
+| 09 | ✅ Complete | Qwen 3 Architecture — A Guided Tour | Qwen3 technical report as map; interactive HF Space architecture diagram; sets up deep-dive pipeline for Ep10+ |
+| 10 | ✅ Complete | mRoPE — The Geometry of Position | Deep dive on multi-resolution RoPE; build from scratch, rotate real Qwen embeddings, visual PCA orbits, translation invariance demo |
 
 ## Workflow
 
