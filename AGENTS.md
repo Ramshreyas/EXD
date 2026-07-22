@@ -63,6 +63,8 @@ This directly enforces "work backwards." The guided tour shows the whole machine
 | 08 | ✅ Complete | Positional Embeddings | Sinusoidal → learned → RoPE, how attention knows token order |
 | 09 | ✅ Complete | Qwen 3 Architecture — A Guided Tour | Qwen3 technical report as map; interactive HF Space architecture diagram; sets up deep-dive pipeline for Ep10+ |
 | 10 | ✅ Complete | mRoPE — The Geometry of Position | Deep dive on multi-resolution RoPE; build from scratch, rotate real Qwen embeddings, visual PCA orbits, translation invariance demo |
+| 11 | 🚧 In Progress | Linear Algebra for Transformers | The vector manipulation toolkit: dot products, matrix×vector, projection up/down, rotation — the four operations behind every transformer |
+| 12 | 🚧 In Progress | Attention Heads — Inside Qwen3.6 | Step through real attention in Qwen3.6-35B-A3B: Q/K/V projections, GQA, gated attention, pronoun resolution |
 
 ## Workflow
 

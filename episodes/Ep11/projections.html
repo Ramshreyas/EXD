@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention Projections — EXD Ep11</title>
+<style>
+:root {
+  --bg: #0d1117; --surface: #161b22; --border: #30363d;
+  --text: #c9d1d9; --dim: #8b949e; --accent: #58a6ff;
+  --qcolor: #f0883e; --kcolor: #3fb950; --vcolor: #bc8cff;
+  --ocolor: #f85149; --gatecolor: #ffa198;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px ui-monospace, SFMono-Regular, monospace;
+  display: flex; justify-content: center; padding: 2rem 1rem;
+}
+.w { max-width: 800px; width: 100%; }
+h1 { font-size: 1.1rem; margin-bottom: .2rem; }
+.sub { font-size: .75rem; color: var(--dim); margin-bottom: 1rem; }
+
+.controls {
+  display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;
+  margin-bottom: 1rem; padding: .6rem .8rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.btn {
+  background: var(--surface); color: var(--accent);
+  border: 1px solid var(--accent); padding: .35rem .8rem;
+  border-radius: 5px; cursor: pointer; font-family: monospace;
+  font-size: .75rem; font-weight: 600;
+}
+.btn:hover { background: rgba(88,166,255,.12); }
+.btn.pri { background: var(--accent); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.step-label { font-size: .7rem; color: var(--dim); margin-left: .25rem; }
+
+.viz {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 1.2rem; margin-bottom: 1rem;
+  min-height: 300px;
+}
+
+.info {
+  font-size: .72rem; color: var(--dim); padding: .6rem .8rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(88,166,255,.04); border-radius: 0 6px 6px 0;
+  line-height: 1.5; margin-bottom: 1rem;
+}
+.info code { color: var(--accent); background: rgba(88,166,255,.1); padding: 0 4px; border-radius: 3px; }
+.info strong { color: var(--text); }
+
+/* --- Viz elements --- */
+.viz-title { font-size: .7rem; color: var(--dim); text-transform: uppercase; margin-bottom: .8rem; }
+
+/* Block diagram */
+.blocks { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 1.2rem; }
+.block {
+  border-radius: 6px; padding: .5rem .7rem; text-align: center;
+  border: 2px solid var(--border); transition: all .4s;
+  background: var(--bg);
+}
+.block.highlight { border-color: var(--accent); box-shadow: 0 0 12px rgba(88,166,255,.25); }
+.block .label { font-size: .55rem; color: var(--dim); display: block; text-transform: uppercase; }
+.block .val { font-size: .85rem; font-weight: 700; display: block; margin-top: 2px; }
+.block .dims { font-size: .58rem; color: var(--dim); margin-top: 2px; }
+.block.q-block { border-left: 3px solid var(--qcolor); }
+.block.k-block { border-left: 3px solid var(--kcolor); }
+.block.v-block { border-left: 3px solid var(--vcolor); }
+.block.o-block { border-left: 3px solid var(--ocolor); }
+.arrow { color: var(--dim); font-size: 1.2rem; }
+
+/* Dimensional bars */
+.bars { margin-top: 1rem; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.bar-label { font-size: .65rem; width: 18px; text-align: right; font-weight: 700; }
+.bar-label.q { color: var(--qcolor); }
+.bar-label.k { color: var(--kcolor); }
+.bar-label.v { color: var(--vcolor); }
+.bar-container {
+  flex: 1; height: 22px; background: var(--bg);
+  border-radius: 3px; overflow: hidden; position: relative;
+  border: 1px solid var(--border);
+}
+.bar-segment {
+  position: absolute; height: 100%; transition: all .5s;
+  border-right: 1px solid rgba(0,0,0,.3);
+}
+.bar-segment:last-child { border-right: none; }
+.bar-annotation {
+  font-size: .55rem; color: var(--dim); position: absolute;
+  top: 50%; transform: translateY(-50%);
+  white-space: nowrap; overflow: hidden;
+}
+.bar-total { font-size: .6rem; color: var(--dim); min-width: 40px; }
+
+/* Head grid */
+.head-grid { margin-top: 1rem; }
+.head-grid .title { font-size: .65rem; color: var(--dim); margin-bottom: .5rem; }
+.head-row { display: flex; gap: 3px; margin-bottom: 3px; align-items: center; }
+.head-row .head-label { font-size: .55rem; color: var(--dim); width: 24px; text-align: right; }
+.head-cell {
+  flex: 1; height: 16px; border-radius: 2px;
+  transition: background .4s;
+}
+
+/* Matrix visualization */
+.matrix-viz {
+  display: flex; gap: 1rem; align-items: center; margin: 1rem 0;
+  justify-content: center;
+}
+.matrix-block {
+  text-align: center; padding: .5rem;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg);
+}
+.matrix-block .shape { font-size: .55rem; color: var(--dim); }
+.matrix-block .grid {
+  display: grid; margin: .3rem 0;
+}
+.matrix-block .cell {
+  border-radius: 1px; opacity: .7;
+}
+.equals { font-size: 1.4rem; color: var(--dim); }
+
+/* GQA comparison */
+.gqa-compare {
+  display: flex; gap: 2rem; margin-top: 1rem; justify-content: center;
+}
+.gqa-col {
+  text-align: center; padding: .8rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg);
+}
+.gqa-col .big { font-size: 1.8rem; font-weight: 700; }
+.gqa-col .desc { font-size: .6rem; color: var(--dim); margin-top: .2rem; }
+.gqa-col.q-col { border-color: var(--qcolor); }
+.gqa-col.q-col .big { color: var(--qcolor); }
+.gqa-col.kv-col { border-color: var(--kcolor); }
+.gqa-col.kv-col .big { color: var(--kcolor); }
+
+/* Comparison ratio */
+.ratio-bar {
+  display: flex; height: 8px; border-radius: 4px; overflow: hidden;
+  width: 200px; margin: .5rem auto;
+}
+.ratio-q { background: var(--qcolor); }
+.ratio-kv { background: var(--kcolor); }
+
+.tok-sample {
+  font-family: monospace; font-size: .7rem; padding: .3rem .6rem;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  display: inline-block; margin: 0 3px;
+}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>Attention Projections — The Linear Algebra</h1>
+<div class="sub">How hidden states become queries, keys, and values · EXD Ep11</div>
+
+<div class="controls">
+  <button class="btn" id="prev">← Prev</button>
+  <button class="btn pri" id="next">Next Step</button>
+  <button class="btn" id="reset">Reset</button>
+  <span class="step-label" id="step-label">Step 0/6</span>
+  <span style="font-size:.55rem;color:var(--dim)">Space=next, ←=prev</span>
+</div>
+
+<div class="viz" id="viz"></div>
+
+<div class="info" id="info">
+  <strong>Projection</strong> = matrix multiplication. The hidden state <strong>h</strong> (ℝ²⁰⁴⁸)
+  hits three learned weight matrices to become <strong>Q</strong>, <strong>K</strong>, <strong>V</strong>.
+  Click <strong>Next Step</strong> to walk through each projection.
+</div>
+</div>
+
+<script>
+// --- State ---
+var step = 0;
+const NUM_STEPS = 6;
+const HIDDEN = 2048;
+const HEAD_DIM = 256;
+const NUM_Q_HEADS = 16;
+const NUM_KV_HEADS = 2;
+const Q_OUT = NUM_Q_HEADS * HEAD_DIM;       // 4096
+const GATE_OUT = NUM_Q_HEADS * HEAD_DIM;     // 4096 (doubled)
+const KV_OUT = NUM_KV_HEADS * HEAD_DIM;      // 512
+
+function $(id) { return document.getElementById(id); }
+
+// --- Color helpers ---
+function heatColor(val, alpha) {
+  // val: -1 to 1
+  var r, g, b;
+  if (val >= 0) {
+    r = Math.round(248 + val * 7);
+    g = Math.round(136 + val * 64);
+    b = Math.round(62 - val * 30);
+  } else {
+    var a = -val;
+    r = Math.round(88 + a * 40);
+    g = Math.round(166 + a * 10);
+    b = Math.round(255 - a * 40);
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha || 0.85) + ')';
+}
+
+function dimColor(i, total, baseHue, alpha) {
+  var h = baseHue + (i / total) * 30;
+  var s = 60;
+  var l = 40 + (i / total) * 20;
+  return 'hsla(' + h + ',' + s + '%,' + l + '%,' + (alpha || 0.8) + ')';
+}
+
+// --- Synthetic hidden state values (for visual variety) ---
+function synthValue(i, total) {
+  // Make a pattern that looks interesting across the dimension
+  var x = (i / total) * Math.PI * 8;
+  return Math.sin(x) * 0.6 + Math.sin(x * 2.3) * 0.3 + Math.sin(x * 5.7) * 0.1;
+}
+
+// --- Render ---
+function render() {
+  var v = $('viz');
+  var html = '';
+
+  // Step 0: The hidden state
+  if (step >= 0) {
+    html += '<div class="viz-title">Hidden State h ∈ ℝ²⁰⁴⁸</div>';
+    html += '<div class="blocks">';
+    html += '<div class="block highlight">';
+    html += '<span class="label">Hidden State h</span>';
+    html += '<span class="val">[1 × 2048]</span>';
+    html += '<span class="dims">one token, 2048 dimensions</span>';
+    html += '</div>';
+    html += '</div>';
+
+    // Show the hidden state as a mini heatmap (64 cols × 32 rows)
+    html += '<div style="display:flex;gap:1px;flex-wrap:wrap;width:100%;max-width:640px;margin:0 auto;">';
+    for (var i = 0; i < HIDDEN; i++) {
+      var vv = synthValue(i, HIDDEN);
+      var c = heatColor(vv, 0.8);
+      html += '<div style="width:8px;height:8px;background:' + c + ';border-radius:1px;" title="dim ' + i + ': ' + vv.toFixed(3) + '"></div>';
+    }
+    html += '</div>';
+    html += '<div style="text-align:center;font-size:.55rem;color:var(--dim);margin-top:4px;">2048 dimensions — each pixel is one dimension</div>';
+  }
+
+  // Step 1: Q projection
+  if (step >= 1) {
+    html += '<div class="viz-title" style="margin-top:1.2rem;">Step 1: Query Projection</div>';
+    html += '<div class="blocks">';
+    html += '<div class="block"><span class="label">h</span><span class="val">[1×2048]</span></div>';
+    html += '<span class="arrow">×</span>';
+    html += '<div class="block q-block highlight">';
+    html += '<span class="label">W_Qᵀ</span>';
+    html += '<span class="val">[2048 × 8192]</span>';
+    html += '<span class="dims">16 heads × 256 dim × 2 (gate)</span>';
+    html += '</div>';
+    html += '<span class="arrow">=</span>';
+    html += '<div class="block q-block">';
+    html += '<span class="label">Q + Gate</span>';
+    html += '<span class="val">[1 × 8192]</span>';
+    html += '<span class="dims">split: [1×4096] query, [1×4096] gate</span>';
+    html += '</div>';
+    html += '</div>';
+
+    // Visual: Q output split into 16 heads
+    html += '<div class="head-grid">';
+    html += '<div class="title">Query = 16 heads × 256 dim each</div>';
+    for (var h = 0; h < NUM_Q_HEADS; h++) {
+      html += '<div class="head-row">';
+      html += '<div class="head-label">H' + h + '</div>';
+      for (var d = 0; d < 32; d++) { // subsample: show 32 "blocks" per head
+        var di = h * HEAD_DIM + d * (HEAD_DIM / 32);
+        var val = synthValue(di, Q_OUT);
+        html += '<div class="head-cell" style="background:' + heatColor(val, 0.9) + ';flex:1;"></div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<div style="text-align:center;font-size:.55rem;color:var(--dim);margin-top:4px;">16 rows = 16 heads · each row = 256 dimensions (shown as 32 blocks)</div>';
+  }
+
+  // Step 2: QK Norm
+  if (step >= 2) {
+    html += '<div class="viz-title" style="margin-top:1.2rem;">Step 2: QK Norm (RMSNorm)</div>';
+    html += '<div class="blocks">';
+    html += '<div class="block q-block">';
+    html += '<span class="label">Q (raw)</span>';
+    html += '<span class="val">[1 × 16 × 256]</span>';
+    html += '</div>';
+    html += '<span class="arrow">→</span>';
+    html += '<div class="block q-block highlight">';
+    html += '<span class="label">RMSNorm</span>';
+    html += '<span class="val">per-head normalize</span>';
+    html += '</div>';
+    html += '<span class="arrow">→</span>';
+    html += '<div class="block q-block">';
+    html += '<span class="label">Q (normed)</span>';
+    html += '<span class="val">unit variance per head</span>';
+    html += '</div>';
+    html += '</div>';
+    html += '<div style="font-size:.65rem;color:var(--dim);line-height:1.5;margin-top:.3rem;">';
+    html += 'RMSNorm(x) = x / sqrt(mean(x²) + ε) × γ &nbsp;·&nbsp; ';
+    html += 'Applied independently to each head\'s 256-dim vector. ';
+    html += 'K is normed the same way. V is not normed.';
+    html += '</div>';
+  }
+
+  // Step 3: K and V projections
+  if (step >= 3) {
+    html += '<div class="viz-title" style="margin-top:1.2rem;">Step 3: Key &amp; Value Projections (GQA)</div>';
+
+    // K
+    html += '<div class="blocks">';
+    html += '<div class="block"><span class="label">h</span><span class="val">[1×2048]</span></div>';
+    html += '<span class="arrow">×</span>';
+    html += '<div class="block k-block highlight">';
+    html += '<span class="label">W_Kᵀ</span>';
+    html += '<span class="val">[2048 × 512]</span>';
+    html += '<span class="dims">2 heads × 256 dim</span>';
+    html += '</div>';
+    html += '<span class="arrow">=</span>';
+    html += '<div class="block k-block">';
+    html += '<span class="label">K</span>';
+    html += '<span class="val">[1 × 512]</span>';
+    html += '</div>';
+    html += '</div>';
+
+    // V
+    html += '<div class="blocks">';
+    html += '<div class="block"><span class="label">h</span><span class="val">[1×2048]</span></div>';
+    html += '<span class="arrow">×</span>';
+    html += '<div class="block v-block highlight">';
+    html += '<span class="label">W_Vᵀ</span>';
+    html += '<span class="val">[2048 × 512]</span>';
+    html += '<span class="dims">2 heads × 256 dim</span>';
+    html += '</div>';
+    html += '<span class="arrow">=</span>';
+    html += '<div class="block v-block">';
+    html += '<span class="label">V</span>';
+    html += '<span class="val">[1 × 512]</span>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // Step 4: GQA comparison
+  if (step >= 4) {
+    html += '<div class="viz-title" style="margin-top:1.2rem;">Step 4: GQA — Why Q is Big and K/V are Small</div>';
+
+    html += '<div class="gqa-compare">';
+    html += '<div class="gqa-col q-col">';
+    html += '<div class="big">4096</div>';
+    html += '<div class="desc">Q dimensions</div>';
+    html += '<div class="desc" style="margin-top:.4rem;">16 heads × 256 dim</div>';
+    html += '<div class="desc">(×2 with gate = 8192)</div>';
+    html += '</div>';
+    html += '<div class="gqa-col kv-col" style="border-color:var(--ocolor);">';
+    html += '<div style="font-size:2rem;color:var(--dim);">÷8</div>';
+    html += '<div class="desc">GQA ratio</div>';
+    html += '</div>';
+    html += '<div class="gqa-col kv-col">';
+    html += '<div class="big">512</div>';
+    html += '<div class="desc">K + V dimensions</div>';
+    html += '<div class="desc" style="margin-top:.4rem;">2 KV heads × 256 dim</div>';
+    html += '<div class="desc">each (1024 total)</div>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div style="margin-top:.8rem;text-align:center;">';
+    html += '<div style="font-size:.65rem;color:var(--dim);margin-bottom:.3rem;">Q heads per KV head</div>';
+    html += '<div style="display:flex;gap:2px;width:300px;margin:0 auto;height:28px;border-radius:4px;overflow:hidden;">';
+    for (var h = 0; h < NUM_Q_HEADS; h++) {
+      var kvHead = Math.floor(h / 8);
+      var hue = kvHead === 0 ? 120 : 280;
+      html += '<div style="flex:1;background:hsl(' + hue + ',50%,40%);display:flex;align-items:center;justify-content:center;font-size:.5rem;color:#fff;">' + h + '</div>';
+    }
+    html += '</div>';
+    html += '<div style="display:flex;justify-content:space-between;width:300px;margin:.2rem auto 0;font-size:.55rem;">';
+    html += '<span style="color:var(--kcolor);">KV head 0</span>';
+    html += '<span style="color:var(--vcolor);">KV head 1</span>';
+    html += '</div>';
+    html += '<div style="font-size:.55rem;color:var(--dim);margin-top:.5rem;">8 Q heads share each KV head.';
+    html += 'K/V cache is 8× smaller than if each Q head had its own K/V.</div>';
+    html += '</div>';
+  }
+
+  // Step 5: Output projection
+  if (step >= 5) {
+    html += '<div class="viz-title" style="margin-top:1.2rem;">Step 5: Output Projection (back to ℝ²⁰⁴⁸)</div>';
+
+    html += '<div style="font-size:.65rem;color:var(--dim);margin-bottom:.6rem;">';
+    html += 'After attention: 16 head outputs concatenated → [1 × 4096]. ';
+    html += 'Applied gate (×σ), then project back to the residual stream.';
+    html += '</div>';
+
+    html += '<div class="blocks">';
+    html += '<div class="block">';
+    html += '<span class="label">concat(heads)</span>';
+    html += '<span class="val">[1 × 4096]</span>';
+    html += '</div>';
+    html += '<span class="arrow">×</span>';
+    html += '<div class="block o-block highlight">';
+    html += '<span class="label">W_Oᵀ</span>';
+    html += '<span class="val">[4096 × 2048]</span>';
+    html += '</div>';
+    html += '<span class="arrow">=</span>';
+    html += '<div class="block highlight">';
+    html += '<span class="label">Output</span>';
+    html += '<span class="val">[1 × 2048]</span>';
+    html += '<span class="dims">back in residual stream</span>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div style="font-size:.65rem;color:var(--dim);line-height:1.5;margin-top:.5rem;">';
+    html += 'The output projection <strong>squeezes</strong> the 4096-dim attention space ';
+    html += 'back into the 2048-dim residual stream. This is a bottleneck: the model ';
+    html += 'must compress what all 16 heads learned into a single 2048-dim update vector.';
+    html += '</div>';
+  }
+
+  // Summary table at final step
+  if (step >= 5) {
+    html += '<div class="viz-title" style="margin-top:1.4rem;">All Four Projections at a Glance</div>';
+    html += '<table style="width:100%;font-size:.65rem;border-collapse:collapse;">';
+    html += '<tr style="color:var(--dim);"><th style="text-align:left;padding:4px 8px;">Projection</th><th style="text-align:right;padding:4px 8px;">Matrix Shape</th><th style="text-align:right;padding:4px 8px;">Output Dims</th><th style="text-align:right;padding:4px 8px;">Parameters</th></tr>';
+    var rows = [
+      ['Q + Gate', '2048 × 8192', '4096 + 4096', '16.8M', 'var(--qcolor)'],
+      ['K', '2048 × 512', '512', '1.0M', 'var(--kcolor)'],
+      ['V', '2048 × 512', '512', '1.0M', 'var(--vcolor)'],
+      ['O', '4096 × 2048', '2048', '8.4M', 'var(--ocolor)'],
+    ];
+    for (var r = 0; r < rows.length; r++) {
+      html += '<tr style="border-top:1px solid var(--border);">';
+      html += '<td style="padding:5px 8px;color:' + rows[r][4] + ';">' + rows[r][0] + '</td>';
+      html += '<td style="text-align:right;padding:5px 8px;font-family:monospace;">' + rows[r][1] + '</td>';
+      html += '<td style="text-align:right;padding:5px 8px;font-family:monospace;">' + rows[r][2] + '</td>';
+      html += '<td style="text-align:right;padding:5px 8px;font-family:monospace;">' + rows[r][3] + '</td>';
+      html += '</tr>';
+    }
+    html += '<tr style="border-top:1px solid var(--border);font-weight:700;">';
+    html += '<td style="padding:5px 8px;color:var(--text);">Total per layer</td>';
+    html += '<td></td><td></td>';
+    html += '<td style="text-align:right;padding:5px 8px;font-family:monospace;">27.2M</td>';
+    html += '</tr>';
+    html += '<tr style="color:var(--dim);">';
+    html += '<td style="padding:3px 8px;">All 4 full-attn layers</td>';
+    html += '<td></td><td></td>';
+    html += '<td style="text-align:right;padding:3px 8px;font-family:monospace;">~109M</td>';
+    html += '</tr>';
+    html += '</table>';
+    html += '<div style="font-size:.55rem;color:var(--dim);margin-top:.4rem;">';
+    html += 'The linear-attention layers (Gated DeltaNet) have their own parameters — ';
+    html += 'these 27.2M are just for each full-attention layer.';
+    html += '</div>';
+  }
+
+  $('viz').innerHTML = html;
+  $('step-label').textContent = 'Step ' + step + '/' + (NUM_STEPS - 1);
+
+  // Info panel
+  var infos = [
+    '<strong>The hidden state h</strong> — a single token represented as a 2048-dimensional vector. This is what flows through the residual stream. Every token in the sequence has its own h.',
+    '<strong>Q projection:</strong> h × W_Qᵀ → Q.<br>The weight matrix W_Q is <code>[2048 × 8192]</code> — note the ×2: Qwen3.5 concatenates the query and a <em>gate</em> signal in one projection. Q = first half (4096), gate = second half (4096).<br><code>Q = h @ W_Qᵀ</code> is just a matrix multiply. The result is reshaped into <code>[16 heads × 256 dim]</code>.',
+    '<strong>QK Norm:</strong> Before attention, Q and K are normalized with RMSNorm. This stabilizes training — prevents attention logits from growing too large in deep networks. Applied per-head, so each head\'s 256-dim vector has unit variance.<br>V is not normalized — the asymmetry is intentional.',
+    '<strong>K and V projections:</strong> h × W_Kᵀ → K, h × W_Vᵀ → V.<br>These matrices are <code>[2048 × 512]</code> — only <strong>2 KV heads × 256 dim</strong>. This is GQA (Grouped Query Attention): 16 Q heads share just 2 K/V heads, reducing the KV cache by 8×.<br>Note: W_K and W_V are 8× smaller than W_Q (before gate).',
+    '<strong>GQA (Grouped Query Attention):</strong> The key insight — the model doesn\'t need a separate K and V for every Q head. 8 Q heads share each KV head. This saves memory (KV cache is 8× smaller) while keeping the expressive power of 16 distinct query projections.<br>Q heads 0–7 share KV head 0. Q heads 8–15 share KV head 1.',
+    '<strong>Output projection:</strong> After attention computes the weighted sum, all 16 head outputs are concatenated back into a <code>[1 × 4096]</code> vector. W_O (<code>[4096 × 2048]</code>) projects this back to ℝ²⁰⁴⁸.<br>This is the <em>narrowing</em>: the model expands into a rich attention space to do its work, then squeezes the result back into the residual stream.<br><br><strong>Bottom line:</strong> "Projection" = matrix multiplication. Four learned matrices transform the hidden state — expand for Q, stay lean for K/V, contract for O.',
+  ];
+  $('info').innerHTML = infos[step];
+
+  // Button states
+  $('prev').disabled = (step <= 0);
+  $('next').disabled = (step >= NUM_STEPS - 1);
+}
+
+function nextStep() {
+  if (step < NUM_STEPS - 1) { step++; render(); }
+}
+function prevStep() {
+  if (step > 0) { step--; render(); }
+}
+function resetFn() {
+  step = 0; render();
+}
+
+$('next').onclick = nextStep;
+$('prev').onclick = prevStep;
+$('reset').onclick = resetFn;
+document.onkeydown = function(e) {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); nextStep(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+};
+
+render();
+</script>
+</body>
+</html>

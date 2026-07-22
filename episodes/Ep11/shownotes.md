@@ -1,144 +1,94 @@
-# Ep11 Shownotes — Attention Heads: Inside the Qwen3.6 Transformer
+# Ep11 Shownotes — Linear Algebra for Transformers
 
-> Recording guide. Open `attention_heads.ipynb` in VS Code (connected to atom's
-> jupyterlab kernel). Walk through the notebook live, feeding real text through
-> the actual Qwen3.6-35B-A3B model.
+> Recording guide. Open `linear_algebra.ipynb` in VS Code (runs locally, no GPU needed —
+> just numpy and matplotlib). Keep `vector_toolkit.html` open in a browser for interactive
+> demos. End with `projections.html` as the bridge to Ep12.
 
 ---
 
 ## Recording Flow
 
-### 0. Setup (Cells "Setup" through "Identify Layers")
-> "We're loading the full 35B model. 130GB unified memory on the GB10 — it fits
-> comfortably. We use eager attention so we can extract the real weight matrices."
+### 0. Why This Episode Exists
+> "Between rotation (Ep10) and attention heads (Ep12), there's a gap. We need a shared
+> vocabulary for the math. This episode fills that gap."
 
-- Show model config: 2048 hidden, 40 layers, 16 Q heads, 2 KV heads (GQA 8:1)
-- Reveal the layer pattern: only 4 full-attention layers out of 40
-- "10% of layers do classic attention. The other 90% use a fast linear approximation."
+- We aren't loading any models. No GPU needed. Pure linear algebra.
+- "Every operation in a transformer is one of four things: dot product, matrix×vector,
+> projection up, or projection down."
 
-### Section 1 — Input & Forward Pass (Cells "Pick an Input Text" through "Forward Pass")
-> "A 13-token sentence: 'The cat sat on the mat because it was tired.' Watch as the
-> model processes it through all 40 layers."
+### Section 1 — Vectors Are Just Lists (Cells "Vectors Intro" + "Vectors Plot")
+> "A token embedding is 2048 numbers. But let's start with 2 numbers we can draw."
 
-- Show tokenization: how the sentence breaks into subword tokens
-- Run the forward pass with `output_attentions=True`
-- Point out: we get attention weights from ALL layers, including linear attention ones
+- Show the 2D vectors: cat = [0.8, 0.3], dog = [0.6, 0.7]
+- Plot them as arrows from origin
+- "The math doesn't care about the dimension. What we do in 2D generalizes to 2048D."
 
-### Section 2 — Attention Heatmaps (Cell "plot_heatmaps")
-> "Each row is one full-attention layer. Each cell (i,j) is how much token j
-> influences token i."
+### Section 2 — Rotation Recap (Cells "Rotation" + "All Angles")
+> "You already know this from Ep10. Rotation is a matrix multiply that preserves length."
 
-- Walk through the 4-layer heatmap
-- Point out: causal mask (upper triangle is zero — future tokens are invisible)
-- Show how patterns change across layers
-- "Early layers often show strong diagonal attention. Deeper layers spread out."
+- Show the rotation matrix, apply to cat, verify norm unchanged
+- 12-position rotation plot — the circle
+- "This is what mRoPE does to Q and K. Only 64 of 256 dims per head."
 
-### Section 3 — Head-by-Head (Cell "head_by_head")
-> "16 heads, each looking at different things."
+### Section 3 — Dot Product (Cells "Dot Product" + "Heatmap")
+> "The dot product is how transformers decide which tokens relate to which."
 
-- 4×4 grid — scan across and call out interesting patterns
-- Some heads focus on the previous token (sub-diagonal), others look at sentence-start
-- One head might track the period, another "the", another the clause boundary
-- "They're specialists. Each head learns a different attention pattern."
+- Compute cat·dog, cat·cat, dog·dog by hand
+- Notice: cat·cat = 0.73 but dog·dog = 0.85 — why?
+- **THE HEATMAP**: "This grid IS the QK^T attention score matrix"
+  - Point to cells: red = related, blue = unrelated
+  - "But something's wrong here..."
 
-### Section 4 — Manual Step-Through Setup (Cells "Stepping Through" through "grab_weights")
-> "Heatmaps show the result. Now we open the machine."
+### Section 4 — Normalization (Cells "Normalization" + "Norm Heatmap")
+> "dog·dog > cat·cat — but they should both be 1.0 for self-similarity."
 
-- Show the Q/K/V/O projection dimensions:
-  - Q: 2048 → 8192 (16 heads × 256 dim × 2 for gate!)
-  - K: 2048 → 512 (2 KV heads × 256 dim)
-  - V: 2048 → 512
-  - O: 4096 → 2048
-- "Q is 16× bigger than K or V. That's GQA — Grouped Query Attention."
+- Show that `a·a = |a|²` — the lengths differ
+- Normalize to unit vectors: now all self-dots = 1.0
+- "This is WHY Qwen3.5 uses QK Norm — RMSNorm on Q and K"
+- Normalized heatmap: clean diagonal, direction-only comparisons
+- "Without normalization, loud vectors dominate attention. With it, only direction matters."
 
-### Section 5 — Run Up to Target Layer (Cell "run_to_target")
-> "We can't just look at raw embeddings. We need to run through all preceding
-> layers because each one transforms the hidden states."
+### Section 5 — Matrix × Vector (Cells "Matrix×Vec" + "Shape Rule")
+> "A matrix is a learned transformation. Multiply by a vector, get a new vector."
 
-- Run the loop: embed → layer 0 → layer 1 → ... → layer N-1
-- "Now we're at the input to the first full-attention layer. These hidden states
-> carry all the context from the preceding linear-attention layers."
+- Walk through W @ x step by step: each output element is a weighted sum
+- Shape rule: (m×n) @ (n,) → (m,)
+- Show the projection shape table — this is why W_Q is 8192×2048
 
-### Section 6 — Q, K, V Computation (Cell "compute_qkv")
-> "Here's where it happens. The hidden states hit four weight matrices simultaneously."
+### Section 6 — Projecting Up (Cells "Project Up" + "Analogy")
+> "When the matrix has more rows than columns, you get MORE dimensions out."
 
-- Show the Q projection with the *2 factor
-- Split into query and gate — "the gate decides how much to trust this head"
-- QK Norm: "RMSNorm on Q and K, applied per-head. This stabilizes training."
-- V projection: no norm, no frills
+- 2D cat → 5D via W_up
+- "Same math as Q projection: 2048D → 8192D"
 
-### Section 7 — RoPE Application (Cell "apply_rope")
-> "Before scores, we rotate. This is the mRoPE from Ep10, happening live."
+### Section 7 — Projecting Down (Cell "Project Down")
+> "When the matrix has fewer rows than columns, you get FEWER dimensions out."
 
-- Show Q and K being rotated
-- Verify: first 64 dims change, last 192 stay identical
-- "Position information enters here, through rotation. Without RoPE, attention
-> wouldn't know word order."
+- 5D → 2D via W_down. Output ≠ original — compression loses information
+- "Same as O projection: 4096D → 2048D. Model learns what to keep."
 
-### Section 8 — THE BIG MOMENT: Attention Scores (Cells "attention_scores" through "weighted_sum")
-> "Q × K^T divided by sqrt(d_k). This is the heart of the transformer."
+### Section 8 — Summary & Bridge (Cells "Summary" + "Bridge")
+> "Every operation in the transformer is one of these."
 
-- Walk through each step:
-  1. Repeat KV heads 8× (GQA expansion)
-  2. QK^T / √256 = matmul + scaling
-  3. Causal mask: future tokens → -inf
-  4. Softmax: -inf → 0, rest → probabilities
-  5. Weighted sum with V
-  6. Gate: multiply by sigmoid(gate)
-  7. Output projection: back to 2048
-- "Each of these 16 heads just voted on what information to pass forward."
-
-### Section 9 — Verification (Cell "compare_manual")
-> "Our manual computation should match the model's output bit-for-bit."
-
-- Side-by-side: model vs manual attention weights
-- Difference heatmap: should be all zeros
-- "This IS what the model does. Nothing hidden, no magic."
-
-### Section 10 — GQA Deep Dive (Cell "gqa_viz")
-> "8 Q heads share KV head 0. The other 8 share KV head 1."
-
-- 2×8 grid: Q heads grouped by KV head
-- "Same K and V, different Q — yet each head learns different patterns."
-- "GQA saves 8× memory on K/V cache while keeping most of multi-head's expressivity."
-
-### Section 11 — Layer Evolution (Cell "layer_evolution")
-> "How does attention change from layer 3 to layer 39?"
-
-- Bar charts: attention distribution shift across layers
-- "Early layers: focus on nearby tokens. Deep layers: focus on semantic connections."
-- Point out: "it" attending to "cat" in deeper layers (pronoun resolution!)
-
-### Section 12 — The Gate (Cell "gate_analysis")
-> "The sigmoid gate — Qwen3.5's unique contribution."
-
-- Mean gate per head: which heads does the model trust more?
-- Token × head gate heatmap: some tokens are gated harder
-- "This is learned. The model decides per-head, per-token how much attention matters."
-
-### Section 13 — Full vs Linear (Cell "full_vs_linear")
-> "Why only 10% full attention?"
-
-- Show the two module types side by side
-- "Linear attention: O(n) instead of O(n²). No softmax, no explicit weight matrix."
-- "The model uses full attention at regular intervals as 'synchronization points'"
-- Pattern: linear, linear, linear, FULL, linear, linear, linear, FULL...
+- Read the summary table: rotation, dot product, normalize, project up, project down
+- "Plus two nonlinearities: softmax and sigmoid. That's it."
+- Open projections.html: same operations, real Qwen3.6 shapes
+- Tease Ep12: "Next episode we watch this happen inside the 70GB model."
 
 ---
 
 ## Recording Notes
 
-1. **Live coding feel**: Don't just execute — narrate each cell while it runs. The
-   model loading takes time; use it to explain what we're about to do.
-2. **Physical analogies**: Q/K/V = "what am I looking for" / "what do I contain" /
-   "what information do I carry." This is the standard explanation but it actually
-   works when you're watching it happen.
-3. **Screen share**: Full-screen notebook. The heatmaps are the payoff.
-4. **Pacing**: The manual step-through section (cells compute_qkv through
-   weighted_sum) is dense. Pause between each step. These 5 cells are the core of
-   the episode.
-5. **Big reveal**: Cell "compare_manual" — when the difference is ~0, that's the
-   moment. "We've reconstructed the exact attention computation from first principles."
+1. **This is a chalk-talk episode.** Less screen share, more explanation. The toolkit
+   is for live demos, not slides.
+2. **Use the toolkit extensively.** Each section has a corresponding tab — switch to it,
+   drag things around, let the visual do the work.
+3. **Bridge at the end is critical.** The last 2 minutes should connect everything to
+   `projections.html` and tease Ep12. "Next episode: we watch this happen inside a 70GB model."
+4. **No GPU, no model.** This episode runs entirely on Yoneda. The notebook uses numpy only.
+   Makes it accessible to viewers who don't have a GB10.
+5. **Pacing**: Sections 1-3 are the core. Section 4-5 are quick. Section 6 is a recap.
+   Section 7-8 are the payoff.
 
 ---
 
@@ -146,29 +96,21 @@
 
 | Ep | Connection |
 |----|-----------|
-| Ep07 | Tokenization & embeddings — the vectors entering attention |
-| Ep08 | Positional embeddings intro — why we need RoPE in attention |
-| Ep09 | Architecture guided tour — the attention layer in the diagram |
-| Ep10 | mRoPE — the exact rotation happening inside Qwen3.5Attention.forward |
-| Ep12 (planned) | Deep dive on one attention mechanism component |
+| Ep07 | Tokenization — the vectors we're manipulating |
+| Ep08 | Positional embeddings — why we need rotation |
+| Ep10 | mRoPE — rotation, now understood as matrix multiply |
+| Ep12 (planned) | Attention heads — all four operations in action |
+| Ep09 | Architecture tour — where each projection lives |
 
 ---
 
 ## Key Numbers
 
-| Parameter | Value |
-|-----------|-------|
-| Hidden size | 2048 |
-| Num layers | 40 |
-| Full-attention layers | 4 (every 4th) |
-| Linear-attention layers | 36 |
-| Q heads | 16 |
-| KV heads | 2 |
-| GQA ratio | 8:1 |
-| Head dim | 256 |
-| Q projection | 2048 → 8192 (heads × dim × 2 for gate) |
-| K projection | 2048 → 512 |
-| V projection | 2048 → 512 |
-| O projection | 4096 → 2048 |
-| RoPE rotary dims | 64 (25% of head_dim) |
-| RoPE theta | 10,000,000 |
+| Concept | Toy | Real (Qwen3.6) |
+|---------|-----|-----------------|
+| Hidden dim | 2D/3D | 2048D |
+| Q projection | 3D → 5D | 2048D → 8192D |
+| K projection | 3D → 2D | 2048D → 512D |
+| V projection | 3D → 2D | 2048D → 512D |
+| O projection | 5D → 3D | 4096D → 2048D |
+| Rotation angle | 30° | position × frequency |
