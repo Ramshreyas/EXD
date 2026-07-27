@@ -88,6 +88,12 @@ discarded. What survives to the next layer is a new 2048-dim hidden state.
 The next layer projects fresh Q/K/V from that enriched state. 2048 in,
 2048 out — always.
 
+But they have different lifetimes during text generation. When the model
+produces one token at a time, the new token's Q is computed fresh — it's
+one vector, cheap. But to attend to all *previous* tokens, their K and V
+must be kept around. This is the **KV cache** — Q is ephemeral, K and V
+accumulate. (More on this in a future episode.)
+
 ---
 
 ## 4. Reshape Into Heads
