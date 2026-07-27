@@ -69,11 +69,17 @@ later, during attention computation — QKᵀ, softmax, weighted V.
 
 The operation is embarrassingly simple:
 
-**q** = x · W_Qᵀ, **k** = x · W_Kᵀ, **v** = x · W_Vᵀ
+$$
+\begin{aligned}
+\mathbf{q} &= x_{(2048,)} \cdot W_Q^T_{(2048, 8192)} &&\rightarrow (8192,) \\
+\mathbf{k} &= x_{(2048,)} \cdot W_K^T_{(2048, 512)}  &&\rightarrow (512,)  \\
+\mathbf{v} &= x_{(2048,)} \cdot W_V^T_{(2048, 512)}  &&\rightarrow (512,)
+\end{aligned}
+$$
 
-Same input `x`, three different weight matrices, three different outputs.
-A single matrix-vector multiply each — the exact `matrix × vector` operation
-introduced in Episode 11.
+Same input `x` (2048-dim), three different weight matrices, three different
+outputs — one vector becomes three. A single matrix-vector multiply each.
+This is the exact `matrix × vector` operation introduced in Episode 11.
 
 The Q vector is 8192-dimensional — that's 16 query heads × 256 head-dim × 2
 (the factor of 2 is the gate, split off later). K and V are 512-dimensional
