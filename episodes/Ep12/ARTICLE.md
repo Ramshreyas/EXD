@@ -71,9 +71,9 @@ The operation is embarrassingly simple:
 
 $$
 \begin{aligned}
-\mathbf{q} &= x_{(2048,)} \cdot W_Q^T_{(2048, 8192)} &&\rightarrow (8192,) \\
-\mathbf{k} &= x_{(2048,)} \cdot W_K^T_{(2048, 512)}  &&\rightarrow (512,)  \\
-\mathbf{v} &= x_{(2048,)} \cdot W_V^T_{(2048, 512)}  &&\rightarrow (512,)
+\mathbf{q} &= x_{(2048)} \cdot {W_Q^{(8192 \times 2048)}}^T &&\rightarrow (8192) \\
+\mathbf{k} &= x_{(2048)} \cdot {W_K^{(512 \times 2048)}}^T  &&\rightarrow (512)  \\
+\mathbf{v} &= x_{(2048)} \cdot {W_V^{(512 \times 2048)}}^T  &&\rightarrow (512)
 \end{aligned}
 $$
 
