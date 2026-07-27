@@ -105,6 +105,12 @@ Each head is a 256-dimensional slice of the projected vector. The 16 Q heads
 can ask 16 different questions. The 2 K heads offer 2 different ways to be
 found. The 2 V heads carry 2 different payloads.
 
+This 16:2 asymmetry is **Grouped Query Attention (GQA)** . Instead of 16 K
+and 16 V heads, the model uses just 2 of each. Every KV head serves 8 Q
+heads — same keys, same values, but 8 different queries asking 8 different
+questions. The diversity is entirely on the Q side. K and V stay lean,
+saving 8× the memory in the KV cache.
+
 No "splitting of the 2048-dim input into heads" happens. The input `x` stays
 full 2048-dim through the projection. The heads emerge from the weight matrix
 organization — W_Q is conceptually 16 separate 2048×256 projections stacked
