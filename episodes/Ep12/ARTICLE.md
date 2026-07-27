@@ -12,8 +12,8 @@
 ## A Note on the Real Model
 
 Qwen3.6-35B-A3B has 40 layers. Only 4 of them use classic attention — the other
-36 use GatedDeltaNet, an efficient linear attention variant. We'll cover that in
-a later episode.
+36 use GatedDeltaNet, an efficient linear attention variant we'll cover in a
+later episode.
 
 For this episode and the next, we pretend every layer uses full attention.
 Understanding the mechanism first makes the optimization make sense.
@@ -25,16 +25,16 @@ Understanding the mechanism first makes the optimization make sense.
 Every token entering an attention layer is a single 2048-dimensional vector —
 its hidden state. 2048 numbers. No structure, no labels — just a list of floats.
 
-For our walkthrough, we'll pick the token `"cat"` from the sentence *"The cat
+For our walkthrough, we pick the token `"cat"` from the sentence *"The cat
 sat on the mat."* and grab its embedding vector before any transformer layers
 touch it.
 
 ![First 128 of 2048 dimensions as a bar chart](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/input_vector.png)
 
 The values are small (range roughly ±0.04), symmetrically distributed around
-zero. The L2 norm is about 0.53 — spread thinly across all 2048 dimensions
-rather than concentrated in a few. This diffuseness is typical of learned
-embeddings.
+zero. The L2 norm is about 0.53 — signal spread thinly across all 2048
+dimensions rather than concentrated in a few. This diffuseness is typical
+of learned embeddings.
 
 ---
 
@@ -54,10 +54,6 @@ every incoming vector:
 These are the only things trained. Backpropagation adjusts these numbers so
 that the resulting Q, K, V produce good attention patterns. The projection
 itself is pure matrix multiplication — no activation function, no nonlinearity.
-
-The total is 18.9 million learned parameters just for Q/K/V at *one* layer.
-Multiplied across 4 full-attention layers, that's ~75 million parameters
-dedicated entirely to the projection step.
 
 **No cross-token mixing yet.** Every token's hidden state is multiplied by
 the same three matrices independently. The cross-token interaction happens
@@ -82,7 +78,7 @@ outputs — one vector becomes three. A single matrix-vector multiply each.
 This is the exact `matrix × vector` operation introduced in Episode 11.
 
 The Q vector is 8192-dimensional — that's 16 query heads × 256 head-dim × 2
-(the factor of 2 is the gate, split off later). K and V are 512-dimensional
+(the factor of 2 is the gate, split off next). K and V are 512-dimensional
 each — just 2 KV heads × 256 head-dim. This 16:2 asymmetry is GQA (Grouped
 Query Attention): eight query heads share each key-value head, saving 8× the
 memory and compute for K and V.
@@ -114,97 +110,82 @@ full 2048-dim through the projection. The heads emerge from the weight matrix
 organization — W_Q is conceptually 16 separate 2048×256 projections stacked
 into one matrix for efficiency.
 
+**The gate** is Q's hidden passenger: projected through the same W_Q matrix
+(doubled output width for efficiency), then split off. After sigmoid during
+the attention computation, gate → 0 silences a head; gate → 1 lets it through
+unchanged. It's the model's per-head, per-dimension trust knob.
+
+![Gate activation per head](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/gate_values.png)
+
 ---
 
 ## 5. Head Norms: Who's Loud?
 
 Each head's L2 norm tells us how strongly it's activated. Heads with higher
-norms will produce larger attention scores (unless normalized later).
+norms will produce larger attention scores — until QK Norm equalizes them in
+the next step.
 
 ![Bar charts of L2 norms for Q, K, V heads](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/head_norms.png)
 
-Some heads are naturally louder than others — this is a property of the
-learned weight matrices. QK Norm (RMSNorm, applied in the next step) will
-equalize these volumes so attention depends on direction, not magnitude.
+Some heads are naturally louder than others — a property of the learned weight
+matrices. QK Norm (RMSNorm) will equalize these volumes so attention depends on
+direction, not magnitude.
 
 ---
 
 ## 6. Are Q, K, V Actually Different?
 
 They all come from the same input `x`. If the weight matrices were identical,
-Q, K, and V would be identical. PCA lets us see whether the model has learned
-to project them into genuinely different subspaces.
+Q, K, and V would be identical. PCA shows whether the model has learned
+genuinely different projections.
 
 ![PCA scatter of all Q, K, V head vectors](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/pca_qkv.png)
 
 The Q heads (blue) cluster separately from the K (orange) and V (red) heads.
-The weight matrices have learned genuinely different projections. A token's
+The weight matrices have learned genuinely different projections — a token's
 "question" lives in a different region of space than its "index entry" or
 its "content payload."
 
----
-
-## 7. Q Head Diversity
-
-16 Q heads all came from the same input. Are they redundant copies, or
-genuinely different?
+What about the 16 Q heads themselves? Are they redundant copies?
 
 ![Cosine similarity matrix of all 16 Q heads](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/q_head_diversity.png)
 
-The off-diagonal cosine similarities are moderate (mostly 0.1–0.3), meaning
-the heads are correlated but far from identical. Each head has learned to
-project the input in a different direction — 16 genuinely different questions
-from one vector.
+The off-diagonal cosine similarities are moderate (mostly 0.1–0.3) — correlated
+but far from identical. Each head has learned to project the input in a
+different direction. 16 genuinely different questions from one vector.
 
 ---
 
-## 8. The GQA Asymmetry
+## 7. What Do the Weight Matrices Learn?
 
-16 Q heads. 2 KV heads. Each KV head serves 8 Q heads.
+The weight matrices themselves have structure. Their singular value spectra
+reveal how many "effective directions" each projection uses.
 
-![Q heads grouped by shared KV head](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/gqa_groups.png)
+![SVD spectra of W_Q, W_K, W_V](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/svd_spectra.png)
 
-Heads 0–7 share KV head 0. Heads 8–15 share KV head 1. Despite sharing the
-same K and V, the Q heads within each group have different norms — the
-diversity in attention patterns comes from different Q projections asking
-different questions against the same keys.
-
----
-
-## 9. Cross-Component Similarity
-
-How aligned are Q heads with the K heads they'll query? And are K and V
-similar to each other?
-
-![Cross-similarity heatmaps: Q vs K, K vs V](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/cross_similarity.png)
-
-K and V are not identical — the model separates "how to find me" from
-"what I communicate." If K ≈ V, attention would reduce to pure similarity
-("attend to tokens that look like me"). The separation lets the model
-find one thing but deliver another.
+A sharp drop-off would mean the matrix only uses a few directions. The gradual
+decay we see means information is distributed across most of the available
+dimensions — these are full-rank projections using their capacity efficiently.
 
 ---
 
-## 10. The Gate: Q's Hidden Passenger
+## 8. Different Tokens, Different Questions
 
-Q's 8192-dimensional output carries an extra payload: a gate signal,
-projected through the same W_Q matrix (doubled width for efficiency).
+Every token in the sentence produces its own Q, K, V. Does "cat" ask different
+questions than "mat"?
 
-The gate is split off after projection. After sigmoid, it controls how
-much of the attention output to trust — gate → 0 silences a head,
-gate → 1 lets it through unchanged.
+![Q head norms for all tokens in the sentence](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/multi_token_q.png)
 
-![Gate activation per head](https://huggingface.co/datasets/EXDai/qkv-projection/resolve/main/images/gate_values.png)
-
-The gate values shown are pre-sigmoid. The sigmoid is applied later, during
-the attention computation, squashing them to [0, 1].
+Yes. Each token activates the 16 Q heads with a different pattern. Some heads
+vary more across tokens than others — these are the heads that distinguish
+between different words, rather than producing a generic "query template."
 
 ---
 
-## 11. The Cost of Projection
+## 9. The Cost of Projection
 
-A single matrix-vector multiply is cheap. But multiplied by sequence length
-and layer count, it adds up:
+A single matrix-vector multiply is cheap. Multiplied by sequence length and
+layer count, it adds up:
 
 | Operation | FLOPs per token |
 |-----------|----------------|
@@ -214,8 +195,8 @@ and layer count, it adds up:
 | **Total per token per layer** | **37.7M** |
 
 For a 7-token sentence across all 4 full-attention layers: ~1 billion FLOPs.
-For the K/V projections (GQA 8:1), the cost is 1/8th of what it would be
-with 16 full KV heads — one of the key efficiency wins of grouped query attention.
+The K/V projections cost 1/8th of what they would with 16 full KV heads —
+that's the efficiency win of GQA.
 
 ---
 
@@ -233,10 +214,14 @@ output vectors reshaped into heads:
 
 - **Projection is the whole story.** No activations, no nonlinearities — just
   matrix multiplication with learned weights.
-- **Q, K, V occupy different subspaces.** PCA shows they cluster separately.
-- **Q heads are diverse but correlated.** 16 genuinely different questions.
-- **GQA asymmetry is stark.** 16 Q heads, 2 KV heads. The burden of "different
-  questions" is on Q.
+- **Q, K, V occupy different subspaces.** PCA shows they cluster separately —
+  genuinely different projections from the same input.
+- **Q heads are diverse but not redundant.** 16 copies of the same operation,
+  but each produces a meaningfully different question.
+- **GQA asymmetry: 16 Q heads, 2 KV heads.** The burden of different
+  perspectives is on Q; K and V stay lean.
+- **The gate piggybacks on Q.** Same W_Q matrix projects both the query and
+  its volume knob.
 - **Q/K/V are temporary.** Projected, used, discarded. 2048 → projections →
   2048. The hidden state dimensionality never changes.
 
