@@ -74,7 +74,7 @@
 > "Context is a blend, not a choice."
 
 - `probs @ V` → 16 context vectors of 256 dims
-- Show 'mat's recipe: a convex mix of all previous tokens' values
+- Show 'rug's recipe: a convex mix of all previous tokens' values
 - "Attention never copies. It mixes. That's where multi-head expressivity
   comes from — 16 interpretations of the same sentence."
 
@@ -102,11 +102,14 @@
 ### Section 11 — What Attention Learned (Cells "attention_heads" through "pronoun")
 > "The mechanism is generic. The patterns are learned."
 
-- Second sentence with a pronoun: "The cat sat on the mat because it was tired."
+- Second sentence with a pronoun: "The cat sat on the rug because it was tired."
 - 4×4 grid of 16 heads at layer 3 — each head is a specialist
 - The payoff: where 'it' looks across layers 3 → 39
 - "Deep layers converge on 'cat'. The model learned pronoun resolution by gradient
   descent — we're watching it happen."
+- Tease the omission: we left 'mat' out of the sentence on purpose. Ask the model
+  what comes after 'The cat sat on the ___' — it says 'mat', and its attention
+  lands on 'cat' and 'sat' (rhyme). That's the hook for generation.
 
 ### Section 12 — The Cost (Cell "cost")
 > "Every token pairs with every previous token. That's O(n²)."

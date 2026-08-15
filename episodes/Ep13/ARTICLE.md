@@ -33,7 +33,7 @@ input to the first full-attention layer (layer 3) is `hidden_states[3]` —
 the embedding after layers 0, 1, and 2 have enriched it with context:
 
 ```
-The →  cat  →  sat  →  on  →  the  →  mat  →  .
+The →  cat  →  sat  →  on  →  the  →  rug  →  .
  │      │      │      │      │       │      │
  └──────┴──────┴──────┴──────┴───────┴──────┘
              7 tokens × 2048 dims — the layer's input
@@ -163,10 +163,10 @@ range.
 
 The probability row is the recipe. The output for token *i* is a
 **weighted average of all value vectors** — a mixture, not a choice.
-"mat" doesn't pick one token to copy; it blends a bit of itself with
+"rug" doesn't pick one token to copy; it blends a bit of itself with
 some of "sat" and a little of "the".
 
-![The 'mat' attention recipe and the 256-dim context vector it blends](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/weighted_sum.png)
+![The 'rug' attention recipe and the 256-dim context vector it blends](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/weighted_sum.png)
 
 Each head does this independently with its own recipe, producing 16
 different 256-dim context vectors. Sixteen interpretations of the same
@@ -220,7 +220,7 @@ bit for bit. Nothing hidden, no magic.
 ## 11. What Attention Learned
 
 The mechanism is generic; the *patterns* are learned. Here's real
-attention on a sentence with a pronoun — *"The cat sat on the mat
+attention on a sentence with a pronoun — *"The cat sat on the rug
 because it was tired."* For "it" to make sense, some head must connect
 it to "cat".
 
@@ -285,6 +285,11 @@ One hidden state per token, one pipeline, eight steps:
   manual math to within bf16 rounding.
 - **The core is O(n²); the projections are O(n).** This asymmetry explains
   why the model reserves full attention for 10 of 40 layers.
+
+We left "mat" out of the sentence on purpose. Ask the model what comes
+after *"The cat sat on the ___"* and it says "mat" — and when it produces
+that token, its attention lands on "cat" and "sat", the words it rhymes
+with. That's the setup for watching attention drive generation.
 
 **Next:** Ep14 — GatedDeltaNet — why the other 30 layers can get away
 with a linear approximation, and what they trade away.
