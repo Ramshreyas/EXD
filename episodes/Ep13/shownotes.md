@@ -19,7 +19,7 @@
   weights, so no flash attention."
 - Show the layer discovery: full-attention layers are `[3, 7, 11, ..., 39]` — 10 of 40.
 - "Ep12's article said 4 of 40. The config actually lists 10, every 4th layer.
-  The notebook counts them — no hardcoding. We pretend all 40 are full attention."
+  The notebook counts them — no hardcoding. We'll focus on full attention only."
 
 ### Section 1 — Run the Model Up to Layer 3 (Cells "Run the Model..." through "Recap")
 > "Attention needs real hidden states, not raw embeddings. Layers 0-2 have already

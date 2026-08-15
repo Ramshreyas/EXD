@@ -17,7 +17,7 @@ attention variant we'll cover in a later episode. (Ep12's article said 4 of
 40 — the actual config lists 10; the notebook discovers the count
 automatically, no hardcoding.)
 
-For this episode we pretend every layer uses full attention. Understanding
+In this episode we focus only on the full-attention layers. Understanding
 the mechanism first makes the optimization make sense.
 
 ---
