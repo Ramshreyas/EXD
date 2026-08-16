@@ -33,10 +33,10 @@ input to the first full-attention layer (layer 3) is `hidden_states[3]` —
 the embedding after layers 0, 1, and 2 have enriched it with context:
 
 ```
-The →  cat  →  sat  →  on  →  the  →  rug  →  .
- │      │      │      │      │       │      │
- └──────┴──────┴──────┴──────┴───────┴──────┘
-             7 tokens × 2048 dims — the layer's input
+The →  cat  →  sat  →  on  →  the
+ │      │      │      │      │
+ └──────┴──────┴──────┴──────┘
+             5 tokens × 2048 dims — the layer's input
 ```
 
 What we're working with, per token:
@@ -76,7 +76,7 @@ strip that control away.
 ## 3. Step 2 — RoPE: Position Enters the Score
 
 Q and K are now direction-normalized but position-blind. Rotate a query
-to position 2 or position 5 and it would score identically against the
+to position 2 or position 4 and it would score identically against the
 same key. The sentence would read as a bag of tokens.
 
 Ep10's mRoPE fixes this with rotation. Qwen3.6 rotates only the **first
@@ -163,10 +163,11 @@ range.
 
 The probability row is the recipe. The output for token *i* is a
 **weighted average of all value vectors** — a mixture, not a choice.
-"rug" doesn't pick one token to copy; it blends a bit of itself with
-some of "sat" and a little of "the".
+Take the last token, "the" (position 4): its output is the context that
+will predict the next word. It doesn't copy one token — it blends a mix
+of the five that came before it.
 
-![The 'rug' attention recipe and the 256-dim context vector it blends](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/weighted_sum.png)
+![The attention recipe for 'the' (the last token) and the context vector it blends](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/weighted_sum.png)
 
 Each head does this independently with its own recipe, producing 16
 different 256-dim context vectors. Sixteen interpretations of the same
@@ -220,7 +221,7 @@ bit for bit. Nothing hidden, no magic.
 ## 11. What Attention Learned
 
 The mechanism is generic; the *patterns* are learned. Here's real
-attention on a sentence with a pronoun — *"The cat sat on the rug
+attention on a sentence with a pronoun — *"The cat sat on the floor
 because it was tired."* For "it" to make sense, some head must connect
 it to "cat".
 
@@ -247,7 +248,7 @@ The attention core has a weakness: **every token pairs with every
 previous token.** Doubling the sequence quadruples the QKᵀ and
 weighted-sum work — O(n²). The projections, by contrast, are O(n).
 
-For a 7-token sentence, the quadratic part is tiny — less than a million
+For a 5-token sentence, the quadratic part is tiny — less than a million
 FLOPs per layer. For a 32K-token context it's a wall:
 
 ![FLOPs vs sequence length — the O(n²) wall](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/cost.png)
@@ -277,7 +278,7 @@ One hidden state per token, one pipeline, eight steps:
 - **The whole mechanism is linear algebra plus one nonlinearity.** Dot
   products, a mask, softmax, a weighted sum, two matrix multiplies.
 - **Position enters at RoPE, nowhere else.** Without rotation, "cat" at
-  position 2 and "cat" at position 5 would score identically.
+  position 2 and "cat" at position 4 would score identically.
 - **Context is a convex blend.** Attention never copies — it mixes.
 - **The gate is a learned trust knob.** Silenced heads still compute; the
   model just decides their opinion shouldn't count.
@@ -286,10 +287,10 @@ One hidden state per token, one pipeline, eight steps:
 - **The core is O(n²); the projections are O(n).** This asymmetry explains
   why the model reserves full attention for 10 of 40 layers.
 
-We left "mat" out of the sentence on purpose. Ask the model what comes
-after *"The cat sat on the ___"* and it says "mat" — and when it produces
-that token, its attention lands on "cat" and "sat", the words it rhymes
-with. That's the setup for watching attention drive generation.
+We deliberately stopped the sentence at "the". Ask the model what comes
+next — it says "mat", and when it produces that token, its attention
+lands on "cat" and "sat", the words it rhymes with. That's the setup for
+watching attention drive generation.
 
 **Next:** Ep14 — GatedDeltaNet — why the other 30 layers can get away
 with a linear approximation, and what they trade away.

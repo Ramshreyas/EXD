@@ -26,10 +26,10 @@
 > enriched the sentence before the first full-attention layer sees it."
 
 - Forward pass with `output_hidden_states=True` and `output_attentions=True`
-- Point out `hidden_states[3]` = the input to layer 3 (7 tokens × 2048 dims)
+- Point out `hidden_states[3]` = the input to layer 3 (5 tokens × 2048 dims)
 - Recap table: Q (16×256), gate (16×256), K (2×256), V (2×256)
 - "Same three matrices as Ep12 — now measured on the real layer input, for all
-  7 tokens at once."
+  5 tokens at once."
 
 ### Section 2 — QK Norm (Cell "qk_norm")
 > "The dot product measures direction AND volume. Loud heads would dominate."
@@ -74,7 +74,7 @@
 > "Context is a blend, not a choice."
 
 - `probs @ V` → 16 context vectors of 256 dims
-- Show 'rug's recipe: a convex mix of all previous tokens' values
+- Show 'the' (the last token): its recipe is the context that predicts the next word
 - "Attention never copies. It mixes. That's where multi-head expressivity
   comes from — 16 interpretations of the same sentence."
 
@@ -102,19 +102,19 @@
 ### Section 11 — What Attention Learned (Cells "attention_heads" through "pronoun")
 > "The mechanism is generic. The patterns are learned."
 
-- Second sentence with a pronoun: "The cat sat on the rug because it was tired."
+- Second sentence with a pronoun: "The cat sat on the floor because it was tired."
 - 4×4 grid of 16 heads at layer 3 — each head is a specialist
 - The payoff: where 'it' looks across layers 3 → 39
 - "Deep layers converge on 'cat'. The model learned pronoun resolution by gradient
   descent — we're watching it happen."
-- Tease the omission: we left 'mat' out of the sentence on purpose. Ask the model
-  what comes after 'The cat sat on the ___' — it says 'mat', and its attention
-  lands on 'cat' and 'sat' (rhyme). That's the hook for generation.
+- Tease the omission: we deliberately stopped at 'the'. Ask the model what comes
+  next — it says 'mat', and its attention lands on 'cat' and 'sat' (rhyme).
+  That's the hook for generation.
 
 ### Section 12 — The Cost (Cell "cost")
 > "Every token pairs with every previous token. That's O(n²)."
 
-- FLOPs table for the 7-token case: QKᵀ + weighted sum dominate
+- FLOPs table for the 5-token case: QKᵀ + weighted sum dominate
 - Log-log plot: full attention vs projections, 32 → 16K tokens
 - "This is why only 10 of 40 layers do full attention. The other 30 use
   GatedDeltaNet — O(n). That's Ep14."
