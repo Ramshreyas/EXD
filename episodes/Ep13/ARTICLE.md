@@ -207,45 +207,7 @@ The result is added to the residual stream and the layer is done.
 
 ---
 
-## 10. Verification — This IS What the Model Does
-
-Every step above was hand-computed: projections, norms, rotation, scores,
-mask, softmax, blend, gate, output. Now the moment of truth — run the
-model's own attention module on the same inputs and compare.
-
-![Difference heatmaps — manual vs model attention weights and output](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/verification.png)
-
-The differences are zero to within bf16 rounding. We reconstructed the
-attention mechanism from first principles and it matches the model
-bit for bit. Nothing hidden, no magic.
-
----
-
-## 11. What Attention Learned
-
-The mechanism is generic; the *patterns* are learned. Here's real
-attention on a sentence with a pronoun — *"The cat sat on the floor
-because it was tired."* For "it" to make sense, some head must connect
-it to "cat".
-
-![All 16 heads at layer 3 — real attention on a real sentence](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/attention_heads.png)
-
-Each head is a specialist with its own fixation: one tracks the previous
-token, another spreads across the whole sentence, a third hovers on
-sentence boundaries. None of these patterns were programmed — each one
-was *learned* by gradient descent as a useful way to read text.
-
-![Where 'it' looks across the full-attention layers](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/pronoun.png)
-
-Now watch "it" across the full-attention layers (3, 7, 11, …). Early
-layers spread its attention broadly. Deeper layers converge on "cat" —
-the layers have learned that pronouns point back at their referents.
-That's not pattern-matching by hand; that's the mechanism, doing what
-training taught it.
-
----
-
-## 12. The Cost of Attention
+## 10. The Cost of Attention
 
 The attention core has a weakness: **every token pairs with every
 previous token.** Doubling the sequence quadruples the QKᵀ and
@@ -285,8 +247,6 @@ One hidden state per token, one pipeline, eight steps:
 - **Context is a convex blend.** Attention never copies — it mixes.
 - **The gate is a learned trust knob.** Silenced heads still compute; the
   model just decides their opinion shouldn't count.
-- **Attention weights are real and extractable** — and they match our
-  manual math to within bf16 rounding.
 - **The core is O(n²); the projections are O(n).** This asymmetry explains
   why the model reserves full attention for 10 of 40 layers.
 
