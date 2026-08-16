@@ -123,11 +123,14 @@ Now Q and K meet. Every query head asks its question of every key:
    have variance ~256 — un-scaled, softmax would saturate into a
    one-hot mess.
 
-![Raw QKᵀ scores for heads 0, 3, 8, 15 — before mask and softmax](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/score_matrix.png)
+![Raw QKᵀ scores for all 16 heads — before mask and softmax](https://huggingface.co/datasets/EXDai/attention-mechanism/resolve/main/images/score_matrix.png)
 
-Each heatmap cell (i, j) is a number: "how much does the query at token i
-want to look at token j?" Positive scores (red) mean the key *answers* the
-query; negative (blue) means it actively doesn't.
+Each heatmap cell (i, j) is the raw score: "how much does the query at
+token i want to look at token j?" These are **unnormalized** — their
+absolute scale and offset are arbitrary, and negative values are normal.
+Softmax in the next step only cares about *relative* values within a row,
+so a low or negative cell can still win a large share of attention once
+the row is normalized.
 
 ---
 

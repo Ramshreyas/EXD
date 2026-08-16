@@ -53,7 +53,9 @@
 - GQA expansion: repeat K/V 8× (heads 0-7 → KV head 0, heads 8-15 → KV head 1)
 - `Q @ Kᵀ / √256` — walk through one cell: 'how much does token i want to look
   at token j?'
-- Show 4 heads: different questions, different score landscapes
+- Show all 16 heads (4×4 grid): some specialists (crisp patterns), some diffuse
+- Note: raw scores are unnormalized — negative values are fine; softmax only
+  sees relative values within a row
 - "The /√256 scaling keeps softmax from saturating. 256-dim dot products have
   variance ~256."
 
