@@ -22,7 +22,7 @@ the mechanism first makes the optimization make sense.
 
 ---
 
-## 1. Where We Left Off
+## Where We Left Off
 
 Ep12 ended with one 2048-dim hidden state per token, projected into Q, K,
 V, and a gate. Now we do it for the whole sentence at once — and crucially,
@@ -54,7 +54,7 @@ Q meets K.
 
 ---
 
-## 2. Step 1 — QK Norm: Equalizing Volume
+## Step 1 — QK Norm: Equalizing Volume
 
 The attention score between two tokens is the dot product `q · k`. But
 Ep11 taught us the dot product measures *both* direction and magnitude —
@@ -73,7 +73,7 @@ strip that control away.
 
 ---
 
-## 3. Step 2 — RoPE: Position Enters the Score
+## Step 2 — RoPE: Position Enters the Score
 
 Q and K are now direction-normalized but position-blind. Rotate a query
 to position 2 or position 4 and it would score identically against the
@@ -111,7 +111,7 @@ Position enters the score here, and nowhere else.
 
 ---
 
-## 4. Step 3 — The Score Matrix (QKᵀ)
+## Step 3 — The Score Matrix (QKᵀ)
 
 Now Q and K meet. Every query head asks its question of every key:
 
@@ -134,7 +134,7 @@ the row is normalized.
 
 ---
 
-## 5. Step 4 — The Causal Mask
+## Step 4 — The Causal Mask
 
 The model generates one token at a time. Token *i* may only see tokens
 0…i — the future must stay invisible. Everything above the diagonal is
@@ -147,7 +147,7 @@ not a learned behavior, an enforced law of causality.
 
 ---
 
-## 6. Step 5 — Softmax: Scores Become Probabilities
+## Step 5 — Softmax: Scores Become Probabilities
 
 Each row is now a competition. Softmax converts the masked scores into
 probabilities that sum to 1 — a budget for how much of each key token's
@@ -162,7 +162,7 @@ range.
 
 ---
 
-## 7. Step 6 — The Weighted Sum: Context as a Blend
+## Step 6 — The Weighted Sum: Context as a Blend
 
 The probability row is the recipe. The output for token *i* is a
 **weighted average of all value vectors** — a mixture, not a choice.
@@ -178,7 +178,7 @@ sentence — this is where multi-head attention gets its expressive power.
 
 ---
 
-## 8. Step 7 — The Gate: Attention's Volume Knob
+## Step 7 — The Gate: Attention's Volume Knob
 
 Qwen3.6's signature move (from Ep12): the Q projection also produces a
 **gate** — per head, per dimension. After attention, the context is
@@ -195,7 +195,7 @@ turned in real time.
 
 ---
 
-## 9. Step 8 — The Output Projection: Back to 2048
+## Step 8 — The Output Projection: Back to 2048
 
 Sixteen heads, sixteen 256-dim contexts — 4096 dimensions of opinion. The
 residual stream is only 2048 wide, so W_O (2048 × 4096) squeezes the
@@ -207,7 +207,7 @@ The result is added to the residual stream and the layer is done.
 
 ---
 
-## 10. The Cost of Attention
+## The Cost of Attention
 
 The attention core has a weakness: **every token pairs with every
 previous token.** Doubling the sequence quadruples the QKᵀ and
