@@ -1,4 +1,4 @@
-# Attention — The Score
+# Attention in Qwen3.6-35B-A3B
 
 **QKᵀ, softmax, and the weighted blend of values.**
 
@@ -13,9 +13,7 @@
 
 Qwen3.6-35B-A3B has 40 layers. Only 10 of them — every 4th layer — use
 classic full attention. The other 30 use GatedDeltaNet, an efficient linear
-attention variant we'll cover in a later episode. (Ep12's article said 4 of
-40 — the actual config lists 10; the notebook discovers the count
-automatically, no hardcoding.)
+attention variant we'll cover in a later episode. 
 
 In this episode we focus only on the full-attention layers. Understanding
 the mechanism first makes the optimization make sense.
